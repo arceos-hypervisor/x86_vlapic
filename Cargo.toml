@@ -1,0 +1,20 @@
+[package]
+name = "x86_vlapic"
+version = "0.1.0"
+edition = "2024"
+description = "x86 Virtual Local APIC"
+
+[dependencies]
+log = "0.4.19"
+memory_addr = "0.3"
+axerrno = "0.1.0"
+paste = "1.0.15"
+
+axaddrspace = { git = "https://github.com/arceos-hypervisor/axaddrspace.git" }
+axdevice_base = { git = "https://github.com/arceos-hypervisor/axdevice_crates.git"}
+
+[patch."https://github.com/arceos-hypervisor/axaddrspace.git"]
+axaddrspace = { path = "../axaddrspace" }
+
+[patch."https://github.com/arceos-hypervisor/axdevice_crates.git"]
+axdevice_base = { path = "../axdevice_crates/axdevice_base" }

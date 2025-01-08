@@ -1,0 +1,201 @@
+use paste::paste;
+
+macro_rules! define_index_enum {
+    ($name:ident) => {
+        paste! {
+            #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+            pub enum $name {
+                [<$name 0>] = 0,
+                [<$name 1>] = 1,
+                [<$name 2>] = 2,
+                [<$name 3>] = 3,
+                [<$name 4>] = 4,
+                [<$name 5>] = 5,
+                [<$name 6>] = 6,
+                [<$name 7>] = 7,
+            }
+
+            impl $name {
+                const fn from(value: usize) -> Self {
+                    match value {
+                        0 => $name::[<$name 0>],
+                        1 => $name::[<$name 1>],
+                        2 => $name::[<$name 2>],
+                        3 => $name::[<$name 3>],
+                        4 => $name::[<$name 4>],
+                        5 => $name::[<$name 5>],
+                        6 => $name::[<$name 6>],
+                        7 => $name::[<$name 7>],
+                        _ => panic!("Invalid index"),
+                    }
+                }
+
+                pub const fn as_usize(&self) -> usize {
+                    *self as usize
+                }
+            }
+
+            impl core::fmt::Display for $name {
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                    match self {
+                        $name::[<$name 0>] => write!(f, "{}0", stringify!($name)),
+                        $name::[<$name 1>] => write!(f, "{}1", stringify!($name)),
+                        $name::[<$name 2>] => write!(f, "{}2", stringify!($name)),
+                        $name::[<$name 3>] => write!(f, "{}3", stringify!($name)),
+                        $name::[<$name 4>] => write!(f, "{}4", stringify!($name)),
+                        $name::[<$name 5>] => write!(f, "{}5", stringify!($name)),
+                        $name::[<$name 6>] => write!(f, "{}6", stringify!($name)),
+                        $name::[<$name 7>] => write!(f, "{}7", stringify!($name)),
+                    }
+                }
+            }
+        }
+    };
+}
+
+define_index_enum!(ISRIndex);
+define_index_enum!(TMRIndex);
+define_index_enum!(IRRIndex);
+
+#[derive(Debug)]
+pub enum ApicRegOffset {
+    /// ID register 0x2.
+    ID,
+    /// Version register 0x3.
+    Version,
+    /// Task Priority register 0x8.
+    TPR,
+    /// Arbitration Priority register 0x9.
+    APR,
+    /// Processor Priority register 0xA.
+    PPR,
+    /// EOI register 0xB.
+    EOI,
+    /// Remote Read register 0xC.
+    RRR,
+    /// Logical Destination Register 0xD.
+    LDR,
+    /// Destination Format register 0xE.
+    DFR,
+    /// Spurious Interrupt Vector register 0xF.
+    SIVR,
+    /// In-Service register 0x10..=0x17.
+    ISR(ISRIndex),
+    /// Trigger Mode register 0x18..=0x1F.
+    TMR(TMRIndex),
+    /// Interrupt Request register 0x20..=0x27.
+    IRR(IRRIndex),
+    /// Error Status register 0x28.
+    ESR,
+    /// LVT CMCI register 0x2F.
+    LvtCMCI,
+    /// Interrupt Command register 0x30.
+    ICR,
+    /// LVT Timer Interrupt register 0x32.
+    LvtTimer,
+    /// LVT Thermal Sensor Interrupt register 0x33.
+    LvtThermal,
+    /// LVT Performance Monitor register 0x34.
+    LvtPmi,
+    /// LVT LINT0 register 0x35.
+    LvtLint0,
+    /// LVT LINT1 register 0x36.
+    LvtLint1,
+    /// LVT Error register 0x37.
+    LvtErr,
+    /// Initial Count register (for Timer) 0x38.
+    TimerInitCount,
+    /// Current Count register (for Timer) 0x39.
+    TimerCurCount,
+    /// Divide Configuration register (for Timer) 0x3E.
+    TimerDivConf,
+}
+
+impl ApicRegOffset {
+    const fn from(value: usize) -> Self {
+        match value as u32 {
+            0x2 => ApicRegOffset::ID,
+            0x3 => ApicRegOffset::Version,
+            0x8 => ApicRegOffset::TPR,
+            0x9 => ApicRegOffset::APR,
+            0xA => ApicRegOffset::PPR,
+            0xB => ApicRegOffset::EOI,
+            0xC => ApicRegOffset::RRR,
+            0xD => ApicRegOffset::LDR,
+            0xE => ApicRegOffset::DFR,
+            0xF => ApicRegOffset::SIVR,
+            0x10..=0x17 => ApicRegOffset::ISR(ISRIndex::from(value - 0x10)),
+            0x18..=0x1F => ApicRegOffset::TMR(TMRIndex::from(value - 0x18)),
+            0x20..=0x27 => ApicRegOffset::IRR(IRRIndex::from(value - 0x20)),
+            0x28 => ApicRegOffset::ESR,
+            0x2F => ApicRegOffset::LvtCMCI,
+            0x30 => ApicRegOffset::ICR,
+            0x32 => ApicRegOffset::LvtTimer,
+            0x33 => ApicRegOffset::LvtThermal,
+            0x34 => ApicRegOffset::LvtPmi,
+            0x35 => ApicRegOffset::LvtLint0,
+            0x36 => ApicRegOffset::LvtLint1,
+            0x37 => ApicRegOffset::LvtErr,
+            0x38 => ApicRegOffset::TimerInitCount,
+            0x39 => ApicRegOffset::TimerCurCount,
+            0x3E => ApicRegOffset::TimerDivConf,
+            _ => panic!("Invalid APIC register offset"),
+        }
+    }
+}
+
+impl core::fmt::Display for ApicRegOffset {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            ApicRegOffset::ID => write!(f, "ID"),
+            ApicRegOffset::Version => write!(f, "Version"),
+            ApicRegOffset::TPR => write!(f, "TPR"),
+            ApicRegOffset::APR => write!(f, "APR"),
+            ApicRegOffset::PPR => write!(f, "PPR"),
+            ApicRegOffset::EOI => write!(f, "EOI"),
+            ApicRegOffset::RRR => write!(f, "RRR"),
+            ApicRegOffset::LDR => write!(f, "LDR"),
+            ApicRegOffset::DFR => write!(f, "DFR"),
+            ApicRegOffset::SIVR => write!(f, "SIVR"),
+            ApicRegOffset::ISR(index) => write!(f, "{:?}", index),
+            ApicRegOffset::TMR(index) => write!(f, "{:?}", index),
+            ApicRegOffset::IRR(index) => write!(f, "{:?}", index),
+            ApicRegOffset::ESR => write!(f, "ESR"),
+            ApicRegOffset::LvtCMCI => write!(f, "LvtCMCI"),
+            ApicRegOffset::ICR => write!(f, "ICR"),
+            ApicRegOffset::LvtTimer => write!(f, "LvtTimer"),
+            ApicRegOffset::LvtThermal => write!(f, "LvtThermal"),
+            ApicRegOffset::LvtPmi => write!(f, "LvtPmi"),
+            ApicRegOffset::LvtLint0 => write!(f, "LvtLint0"),
+            ApicRegOffset::LvtLint1 => write!(f, "LvtLint1"),
+            ApicRegOffset::LvtErr => write!(f, "LvtErr"),
+            ApicRegOffset::TimerInitCount => write!(f, "TimerInitCount"),
+            ApicRegOffset::TimerCurCount => write!(f, "TimerCurCount"),
+            ApicRegOffset::TimerDivConf => write!(f, "TimerDivConf"),
+        }
+    }
+}
+
+pub mod xapic {
+    use super::ApicRegOffset;
+
+    pub const DEFAULT_APIC_BASE: usize = 0xFEE0_0000;
+    pub const APIC_MMIO_SIZE: usize = 0x1000;
+
+    pub(crate) const fn xapic_mmio_access_reg_offset(addr: usize) -> ApicRegOffset {
+        ApicRegOffset::from((addr & (APIC_MMIO_SIZE - 1)) >> 4)
+    }
+}
+
+pub mod x2apic {
+    use axaddrspace::device::SysRegAddr;
+
+    use super::ApicRegOffset;
+
+    pub const X2APIC_MSE_REG_BASE: usize = 0x800;
+    pub const X2APIC_MSE_REG_SIZE: usize = 0x100;
+
+    pub(crate) const fn x2apic_mmio_access_reg(addr: SysRegAddr) -> ApicRegOffset {
+        ApicRegOffset::from(addr.addr() - X2APIC_MSE_REG_BASE)
+    }
+}
