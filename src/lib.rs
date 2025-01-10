@@ -6,7 +6,9 @@ extern crate alloc;
 extern crate log;
 
 mod consts;
+mod lvt;
 mod vlapic;
+mod regs;
 
 use alloc::boxed::Box;
 
@@ -17,6 +19,8 @@ use axaddrspace::device::{AccessWidth, SysRegAddr, SysRegAddrRange};
 use axaddrspace::{AxMmHal, GuestPhysAddr};
 use axdevice_base::{BaseDeviceOps, DeviceRWContext, EmuDeviceType, InterruptInjector};
 
+use crate::consts::x2apic::x2apic_msr_access_reg;
+use crate::consts::xapic::xapic_mmio_access_reg_offset;
 use crate::vlapic::VirtualApicRegs;
 
 pub struct EmulatedLocalApic<H: AxMmHal> {
@@ -54,7 +58,8 @@ impl<H: AxMmHal> BaseDeviceOps<AddrRange<GuestPhysAddr>> for EmulatedLocalApic<H
             "EmulatedLocalApic::handle_read: addr={:?}, width={:?}, context={:?}",
             addr, width, context.vcpu_id
         );
-        todo!()
+        let reg_off = xapic_mmio_access_reg_offset(addr);
+        self.vlapic_regs.handle_read(reg_off, width, context)
     }
 
     fn handle_write(
@@ -68,7 +73,8 @@ impl<H: AxMmHal> BaseDeviceOps<AddrRange<GuestPhysAddr>> for EmulatedLocalApic<H
             "EmulatedLocalApic::handle_write: addr={:?}, width={:?}, val={:#x}, context={:?}",
             addr, width, val, context.vcpu_id
         );
-        todo!()
+        let reg_off = xapic_mmio_access_reg_offset(addr);
+        self.vlapic_regs.handle_write(reg_off, width, context)
     }
 
     fn set_interrupt_injector(&mut self, _injector: Box<InterruptInjector>) {
@@ -99,7 +105,8 @@ impl<H: AxMmHal> BaseDeviceOps<SysRegAddrRange> for EmulatedLocalApic<H> {
             "EmulatedLocalApic::handle_read: addr={:?}, width={:?}, context={:?}",
             addr, width, context.vcpu_id
         );
-        todo!()
+        let reg_off = x2apic_msr_access_reg(addr);
+        self.vlapic_regs.handle_read(reg_off, width, context)
     }
 
     fn handle_write(
@@ -113,7 +120,8 @@ impl<H: AxMmHal> BaseDeviceOps<SysRegAddrRange> for EmulatedLocalApic<H> {
             "EmulatedLocalApic::handle_write: addr={:?}, width={:?}, val={:#x}, context={:?}",
             addr, width, val, context.vcpu_id
         );
-        todo!()
+        let reg_off = x2apic_msr_access_reg(addr);
+        self.vlapic_regs.handle_write(reg_off, width, context)
     }
 
     fn set_interrupt_injector(&mut self, _injector: Box<InterruptInjector>) {

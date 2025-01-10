@@ -90,7 +90,9 @@ pub enum ApicRegOffset {
     /// LVT CMCI register 0x2F.
     LvtCMCI,
     /// Interrupt Command register 0x30.
-    ICR,
+    ICRLow,
+    /// Interrupt Command register high 0x30.
+    ICRHi,
     /// LVT Timer Interrupt register 0x32.
     LvtTimer,
     /// LVT Thermal Sensor Interrupt register 0x33.
@@ -129,7 +131,8 @@ impl ApicRegOffset {
             0x20..=0x27 => ApicRegOffset::IRR(IRRIndex::from(value - 0x20)),
             0x28 => ApicRegOffset::ESR,
             0x2F => ApicRegOffset::LvtCMCI,
-            0x30 => ApicRegOffset::ICR,
+            0x30 => ApicRegOffset::ICRLow,
+            0x31 => ApicRegOffset::ICRHi,
             0x32 => ApicRegOffset::LvtTimer,
             0x33 => ApicRegOffset::LvtThermal,
             0x34 => ApicRegOffset::LvtPmi,
@@ -162,7 +165,8 @@ impl core::fmt::Display for ApicRegOffset {
             ApicRegOffset::IRR(index) => write!(f, "{:?}", index),
             ApicRegOffset::ESR => write!(f, "ESR"),
             ApicRegOffset::LvtCMCI => write!(f, "LvtCMCI"),
-            ApicRegOffset::ICR => write!(f, "ICR"),
+            ApicRegOffset::ICRLow => write!(f, "ICR_LOW"),
+            ApicRegOffset::ICRHi => write!(f, "ICR_HI"),
             ApicRegOffset::LvtTimer => write!(f, "LvtTimer"),
             ApicRegOffset::LvtThermal => write!(f, "LvtThermal"),
             ApicRegOffset::LvtPmi => write!(f, "LvtPmi"),
@@ -176,14 +180,19 @@ impl core::fmt::Display for ApicRegOffset {
     }
 }
 
+pub const RESET_LVT_TIMER: u32 = 0x0001_0000;
+pub const RESET_LVT_THERMAL: u32 = 0x0001_0000;
+
 pub mod xapic {
+    use axaddrspace::GuestPhysAddr;
+
     use super::ApicRegOffset;
 
     pub const DEFAULT_APIC_BASE: usize = 0xFEE0_0000;
     pub const APIC_MMIO_SIZE: usize = 0x1000;
 
-    pub(crate) const fn xapic_mmio_access_reg_offset(addr: usize) -> ApicRegOffset {
-        ApicRegOffset::from((addr & (APIC_MMIO_SIZE - 1)) >> 4)
+    pub(crate) const fn xapic_mmio_access_reg_offset(addr: GuestPhysAddr) -> ApicRegOffset {
+        ApicRegOffset::from((addr.as_usize() & (APIC_MMIO_SIZE - 1)) >> 4)
     }
 }
 
@@ -195,7 +204,7 @@ pub mod x2apic {
     pub const X2APIC_MSE_REG_BASE: usize = 0x800;
     pub const X2APIC_MSE_REG_SIZE: usize = 0x100;
 
-    pub(crate) const fn x2apic_mmio_access_reg(addr: SysRegAddr) -> ApicRegOffset {
+    pub(crate) const fn x2apic_msr_access_reg(addr: SysRegAddr) -> ApicRegOffset {
         ApicRegOffset::from(addr.addr() - X2APIC_MSE_REG_BASE)
     }
 }
