@@ -1,3 +1,4 @@
+use tock_registers::LocalRegisterCopy;
 use tock_registers::register_bitfields;
 use tock_registers::registers::ReadWrite;
 
@@ -62,4 +63,11 @@ register_bitfields! {
 /// Specifies interrupt delivery when the thermal sensor generates an interrupt (see Section 15.8.2, “Thermal Monitor”).
 /// This LVT entry is implementation specific, not architectural.
 /// If implemented, it will always be at base address FEE0 0330H.
-pub type LvtThermalMonitorRegister = ReadWrite<u32, LVT_THERMAL_MONITOR::Register>;
+pub type LvtThermalMonitorRegisterMmio = ReadWrite<u32, LVT_THERMAL_MONITOR::Register>;
+
+/// A read-write copy of LVT Thermal Monitor Register (FEE0 0330H).
+///
+/// This behaves very similarly to a MMIO read-write register, but instead of doing a
+/// volatile read to MMIO to get the value for each function call, a copy of the
+/// register contents are stored locally in memory.
+pub type LvtThermalMonitorRegisterLocal = LocalRegisterCopy<u32, LVT_THERMAL_MONITOR::Register>;

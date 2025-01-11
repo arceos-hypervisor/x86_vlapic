@@ -1,3 +1,4 @@
+use tock_registers::LocalRegisterCopy;
 use tock_registers::register_bitfields;
 use tock_registers::registers::ReadWrite;
 
@@ -33,4 +34,11 @@ register_bitfields! {
 
 /// LVT Error Register (FEE0 0370H)
 /// Specifies interrupt delivery when the APIC detects an internal error (see Section 11.5.3, “Error Handling”).
-pub type LvtErrorRegister = ReadWrite<u32, LVT_ERROR::Register>;
+pub type LvtErrorRegisterMmio = ReadWrite<u32, LVT_ERROR::Register>;
+
+/// A read-write copy of LVT Error Register (FEE0 0370H).
+///
+/// This behaves very similarly to a MMIO read-write register, but instead of doing a
+/// volatile read to MMIO to get the value for each function call, a copy of the
+/// register contents are stored locally in memory.
+pub type LvtErrorRegisterLocal = LocalRegisterCopy<u32, LVT_ERROR::Register>;

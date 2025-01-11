@@ -1,3 +1,4 @@
+use tock_registers::LocalRegisterCopy;
 use tock_registers::register_bitfields;
 use tock_registers::registers::ReadWrite;
 
@@ -17,11 +18,11 @@ register_bitfields! {
             /// (11b) is reserved
             Reserved = 0b11
         ],
-        /// Mask: Interrupt mask: 
-        /// (0) enables reception of the interrupt and (1) inhibits reception of the interrupt. 
-        /// When the local APIC handles a performance-monitoring counters interrupt, 
-        /// it automatically sets the mask flag in the LVT performance counter register. 
-        /// This flag is set to 1 on reset. 
+        /// Mask: Interrupt mask:
+        /// (0) enables reception of the interrupt and (1) inhibits reception of the interrupt.
+        /// When the local APIC handles a performance-monitoring counters interrupt,
+        /// it automatically sets the mask flag in the LVT performance counter register.
+        /// This flag is set to 1 on reset.
         /// It can be cleared only by software.
         Mask OFFSET(16) NUMBITS(1) [
             /// Not masked, enables reception of the interrupt.
@@ -48,4 +49,11 @@ register_bitfields! {
 }
 
 /// LVT Timer Register (FEE0 0320H)
-pub type LvtTimerRegister = ReadWrite<u32, LVT_TIMER::Register>;
+pub type LvtTimerRegisterMmio = ReadWrite<u32, LVT_TIMER::Register>;
+
+/// A read-write copy of LVT Timer Register (FEE0 0320H).
+///
+/// This behaves very similarly to a MMIO read-write register, but instead of doing a
+/// volatile read to MMIO to get the value for each function call, a copy of the
+/// register contents are stored locally in memory.
+pub type LvtTimerRegisterLocal = LocalRegisterCopy<u32, LVT_TIMER::Register>;

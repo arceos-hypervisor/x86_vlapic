@@ -1,18 +1,16 @@
 use core::ptr::NonNull;
 
 use axerrno::AxResult;
-use paste::paste;
-
 use memory_addr::PAGE_SIZE_4K;
+use tock_registers::interfaces::Readable;
 
 use axaddrspace::device::AccessWidth;
 use axaddrspace::{AxMmHal, HostPhysAddr, HostVirtAddr, PhysFrame};
 use axdevice_base::DeviceRWContext;
-use tock_registers::interfaces::Readable;
 
-use crate::consts::ApicRegOffset;
+use crate::consts::{ApicRegOffset, RESET_SPURIOUS_INTERRUPT_VECTOR};
 use crate::lvt::LocalVectorTable;
-use crate::regs::LocalAPICRegs;
+use crate::regs::{LocalAPICRegs, SpuriousInterruptVectorRegisterLocal};
 
 #[repr(align(4096))]
 struct APICAccessPage([u8; PAGE_SIZE_4K]);
@@ -26,6 +24,11 @@ pub struct VirtualApicRegs<H: AxMmHal> {
     /// The physical address of the virtual-APIC page is the virtual-APIC address,
     /// a 64-bit VM-execution control field in the VMCS (see Section 25.6.8).
     virtual_lapic: NonNull<LocalAPICRegs>,
+    /// Copies of some registers in the virtual APIC page,
+    /// to be able to detect what changed (e.g. svr_last)
+    svr_last: SpuriousInterruptVectorRegisterLocal,
+    /// Copies of some registers in the virtual APIC page,
+    /// to maintain a coherent snapshot of the register (e.g. lvt_last)
     lvt_last: LocalVectorTable,
     apic_page: PhysFrame<H>,
 }
@@ -34,8 +37,9 @@ impl<H: AxMmHal> VirtualApicRegs<H> {
     pub fn new() -> Self {
         let apic_frame = PhysFrame::alloc_zero().expect("allocate virtual-APIC page failed");
         Self {
+            virtual_lapic: NonNull::new(apic_frame.as_mut_ptr().cast()).unwrap(),
             apic_page: apic_frame,
-            virtual_lapic: NonNull::new(apic_frame.as_mut_ptr()).unwrap(),
+            svr_last: SpuriousInterruptVectorRegisterLocal::new(RESET_SPURIOUS_INTERRUPT_VECTOR),
             lvt_last: LocalVectorTable::default(),
         }
     }
@@ -101,8 +105,8 @@ impl<H: AxMmHal> VirtualApicRegs<H> {
                 debug!("[VLAPIC] read PPR register: {:#010X}", value);
             }
             ApicRegOffset::EOI => {
-                value = self.regs().EOI.get() as _;
-                debug!("[VLAPIC] read EOI register: {:#010X}", value);
+                // value = self.regs().EOI.get() as _;
+                warn!("[VLAPIC] read EOI register: {:#010X}", value);
             }
             ApicRegOffset::LDR => {
                 value = self.regs().LDR.get() as _;
@@ -135,65 +139,56 @@ impl<H: AxMmHal> VirtualApicRegs<H> {
             ApicRegOffset::ICRLow => {
                 value = self.regs().ICR_LO.get() as _;
                 debug!("[VLAPIC] read ICR_LOW register: {:#010X}", value);
+                if width == AccessWidth::Qword {
+                    let icr_hi = self.regs().ICR_HI.get() as usize;
+                    value |= icr_hi << 32;
+                    debug!("[VLAPIC] read ICR register: {:#018X}", value);
+                }
+            }
+            ApicRegOffset::ICRHi => {
+                value = self.regs().ICR_HI.get() as _;
+                debug!("[VLAPIC] read ICR_HI register: {:#010X}", value);
             }
             ApicRegOffset::LvtCMCI => {
-                value = self.regs().LVT_CMCI.get() as _;
+                value = self.lvt_last.lvt_cmci.get() as _;
                 debug!("[VLAPIC] read LVT_CMCI register: {:#010X}", value);
             }
-
-            // ApicRegOffset::ICRLow => {
-            //     value = self.get_icr_lo() as _;
-            //     debug!("[VLAPIC] read ICR_LOW register: {:#010X}", value);
-            //     if width == AccessWidth::Qword {
-            //         let icr_hi = self.get_icr_hi() as usize;
-            //         value |= icr_hi << 32;
-            //         debug!("[VLAPIC] read ICR register: {:#018X}", value);
-            //     }
-            // }
-            // ApicRegOffset::ICRHi => {
-            //     value = self.get_icr_hi() as _;
-            //     debug!("[VLAPIC] read ICR_HI register: {:#010X}", value);
-            // }
-            // ApicRegOffset::LvtCMCI => {
-            //     value = self.get_lvt_cmci() as _;
-            //     debug!("[VLAPIC] read LvtCMCI register: {:#010X}", value);
-            // }
-            // ApicRegOffset::LvtTimer => {
-            //     value = self.get_lvt_timer() as _;
-            //     debug!("[VLAPIC] read LvtTimer register: {:#010X}", value);
-            // }
-            // ApicRegOffset::LvtThermal => {
-            //     value = self.get_lvt_thermal() as _;
-            //     debug!("[VLAPIC] read LvtThermal register: {:#010X}", value);
-            // }
-            // ApicRegOffset::LvtPmi => {
-            //     value = self.get_lvt_pmi() as _;
-            //     debug!("[VLAPIC] read LvtPmi register: {:#010X}", value);
-            // }
-            // ApicRegOffset::LvtLint0 => {
-            //     value = self.get_lvt_lint0() as _;
-            //     debug!("[VLAPIC] read LvtLint0 register: {:#010X}", value);
-            // }
-            // ApicRegOffset::LvtLint1 => {
-            //     value = self.get_lvt_lint1() as _;
-            //     debug!("[VLAPIC] read LvtLint1 register: {:#010X}", value);
-            // }
-            // ApicRegOffset::LvtErr => {
-            //     value = self.get_lvt_error() as _;
-            //     debug!("[VLAPIC] read LvtErr register: {:#010X}", value);
-            // }
-            // ApicRegOffset::TimerInitCount => {
-            //     value = self.get_icr_timer() as _;
-            //     debug!("[VLAPIC] read TimerInitCount register: {:#010X}", value);
-            // }
-            // ApicRegOffset::TimerCurCount => {
-            //     value = self.get_ccr_timer() as _;
-            //     debug!("[VLAPIC] read TimerCurCount register: {:#010X}", value);
-            // }
-            // ApicRegOffset::TimerDivConf => {
-            //     value = self.get_dcr_timer() as _;
-            //     debug!("[VLAPIC] read TimerDivConf register: {:#010X}", value);
-            // }
+            ApicRegOffset::LvtTimer => {
+                value = self.lvt_last.lvt_timer.get() as _;
+                debug!("[VLAPIC] read LVT_TIMER register: {:#010X}", value);
+            }
+            ApicRegOffset::LvtThermal => {
+                value = self.lvt_last.lvt_thermal.get() as _;
+                debug!("[VLAPIC] read LvtThermal register: {:#010X}", value);
+            }
+            ApicRegOffset::LvtPmc => {
+                value = self.lvt_last.lvt_perf_count.get() as _;
+                debug!("[VLAPIC] read LvtPmi register: {:#010X}", value);
+            }
+            ApicRegOffset::LvtLint0 => {
+                value = self.lvt_last.lvt_lint0.get() as _;
+                debug!("[VLAPIC] read LvtLint0 register: {:#010X}", value);
+            }
+            ApicRegOffset::LvtLint1 => {
+                value = self.lvt_last.lvt_lint1.get() as _;
+                debug!("[VLAPIC] read LvtLint1 register: {:#010X}", value);
+            }
+            ApicRegOffset::LvtErr => {
+                value = self.lvt_last.lvt_err.get() as _;
+                debug!("[VLAPIC] read LvtErr register: {:#010X}", value);
+            }
+            ApicRegOffset::TimerInitCount => {
+                value = self.regs().ICR_TIMER.get() as _;
+                debug!("[VLAPIC] read TimerInitCount register: {:#010X}", value);
+            }
+            ApicRegOffset::TimerCurCount => {
+                value = self.regs().CCR_TIMER.get() as _;
+                debug!("[VLAPIC] read TimerCurCount register: {:#010X}", value);
+            }
+            ApicRegOffset::TimerDivConf => {
+                value = self.regs().DCR_TIMER.get() as _;
+                debug!("[VLAPIC] read TimerDivConf register: {:#010X}", value);
+            }
             _ => {
                 warn!("[VLAPIC] read unknown APIC register: {:?}", offset);
             }

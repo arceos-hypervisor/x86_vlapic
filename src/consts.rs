@@ -97,8 +97,8 @@ pub enum ApicRegOffset {
     LvtTimer,
     /// LVT Thermal Sensor Interrupt register 0x33.
     LvtThermal,
-    /// LVT Performance Monitor register 0x34.
-    LvtPmi,
+    /// LVT Performance Monitoring Counters Register 0x34.
+    LvtPmc,
     /// LVT LINT0 register 0x35.
     LvtLint0,
     /// LVT LINT1 register 0x36.
@@ -135,7 +135,7 @@ impl ApicRegOffset {
             0x31 => ApicRegOffset::ICRHi,
             0x32 => ApicRegOffset::LvtTimer,
             0x33 => ApicRegOffset::LvtThermal,
-            0x34 => ApicRegOffset::LvtPmi,
+            0x34 => ApicRegOffset::LvtPmc,
             0x35 => ApicRegOffset::LvtLint0,
             0x36 => ApicRegOffset::LvtLint1,
             0x37 => ApicRegOffset::LvtErr,
@@ -169,7 +169,7 @@ impl core::fmt::Display for ApicRegOffset {
             ApicRegOffset::ICRHi => write!(f, "ICR_HI"),
             ApicRegOffset::LvtTimer => write!(f, "LvtTimer"),
             ApicRegOffset::LvtThermal => write!(f, "LvtThermal"),
-            ApicRegOffset::LvtPmi => write!(f, "LvtPmi"),
+            ApicRegOffset::LvtPmc => write!(f, "LvtPerformanceMonitoringCounter"),
             ApicRegOffset::LvtLint0 => write!(f, "LvtLint0"),
             ApicRegOffset::LvtLint1 => write!(f, "LvtLint1"),
             ApicRegOffset::LvtErr => write!(f, "LvtErr"),
@@ -180,8 +180,14 @@ impl core::fmt::Display for ApicRegOffset {
     }
 }
 
-pub const RESET_LVT_TIMER: u32 = 0x0001_0000;
-pub const RESET_LVT_THERMAL: u32 = 0x0001_0000;
+/// 11.5.1 Local Vector Table
+/// Figure 11-8. Local Vector Table (LVT)
+/// - Value After Reset: 0001 0000H
+pub const RESET_LVT_REG: u32 = 0x0001_0000;
+/// 11.9 SPURIOUS INTERRUPT
+/// - Address: FEE0 00F0H
+/// - Value after reset: 0000 00FFH
+pub const RESET_SPURIOUS_INTERRUPT_VECTOR: u32 = 0x0000_00FF;
 
 pub mod xapic {
     use axaddrspace::GuestPhysAddr;

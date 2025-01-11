@@ -7,8 +7,8 @@ extern crate log;
 
 mod consts;
 mod lvt;
-mod vlapic;
 mod regs;
+mod vlapic;
 
 use alloc::boxed::Box;
 

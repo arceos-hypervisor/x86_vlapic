@@ -1,39 +1,38 @@
 //! Local Vector Table
 
-use tock_registers::register_bitfields;
-use tock_registers::registers::ReadOnly;
-
-use crate::consts::{RESET_LVT_THERMAL, RESET_LVT_TIMER};
-use crate::regs::lvt::LvtCmciRegisterLocal;
+use crate::consts::RESET_LVT_REG;
+use crate::regs::lvt::{
+    LvtCmciRegisterLocal, LvtErrorRegisterLocal, LvtLint0RegisterLocal, LvtLint1RegisterLocal,
+    LvtPerformanceCounterRegisterLocal, LvtThermalMonitorRegisterLocal, LvtTimerRegisterLocal,
+};
 
 pub struct LocalVectorTable {
     /// LVT CMCI Register (FEE0 02F0H)
-    lvt_cmci: LvtCmciRegisterLocal,
+    pub lvt_cmci: LvtCmciRegisterLocal,
     /// LVT Timer Register (FEE0 0320H)
-    lvt_timer: u32,
+    pub lvt_timer: LvtTimerRegisterLocal,
     /// LVT Thermal Monitor Register (FEE0 0330H)
-    lvt_thermal: u32,
+    pub lvt_thermal: LvtThermalMonitorRegisterLocal,
     /// LVT Performance Counter Register (FEE0 0340H)
-    lvt_pmi: u32,
+    pub lvt_perf_count: LvtPerformanceCounterRegisterLocal,
     /// LVT LINT0 Register (FEE0 0350H)
-    lvt_lint0: u32,
+    pub lvt_lint0: LvtLint0RegisterLocal,
     /// LVT LINT1 Register (FEE0 0360H)
-    lvt_lint1: u32,
+    pub lvt_lint1: LvtLint1RegisterLocal,
     /// LVT Error register 0x37.
-    lvt_err: u32,
+    pub lvt_err: LvtErrorRegisterLocal,
 }
 
 impl Default for LocalVectorTable {
     fn default() -> Self {
         LocalVectorTable {
-            lvt_cmci: LvtCmciRegisterLocal::new(0),
-            // Value after Reset: 0001 0000H
-            lvt_timer: RESET_LVT_TIMER,
-            lvt_thermal: RESET_LVT_THERMAL,
-            lvt_pmi: 0,
-            lvt_lint0: 0,
-            lvt_lint1: 0,
-            lvt_err: 0,
+            lvt_cmci: LvtCmciRegisterLocal::new(RESET_LVT_REG),
+            lvt_timer: LvtTimerRegisterLocal::new(RESET_LVT_REG),
+            lvt_thermal: LvtThermalMonitorRegisterLocal::new(RESET_LVT_REG),
+            lvt_perf_count: LvtPerformanceCounterRegisterLocal::new(RESET_LVT_REG),
+            lvt_lint0: LvtLint0RegisterLocal::new(RESET_LVT_REG),
+            lvt_lint1: LvtLint1RegisterLocal::new(RESET_LVT_REG),
+            lvt_err: LvtErrorRegisterLocal::new(RESET_LVT_REG),
         }
     }
 }

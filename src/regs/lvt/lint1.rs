@@ -1,3 +1,4 @@
+use tock_registers::LocalRegisterCopy;
 use tock_registers::register_bitfields;
 use tock_registers::registers::ReadWrite;
 
@@ -86,4 +87,11 @@ register_bitfields! {
 
 /// LVT LINT1 Register (FEE0 0360H)
 /// Specifies interrupt delivery when an interrupt is signaled at the LINT1 pin.
-pub type LvtLint1Register = ReadWrite<u32, LVT_LINT1::Register>;
+pub type LvtLint1RegisterMmio = ReadWrite<u32, LVT_LINT1::Register>;
+
+/// A read-write copy of LVT LINT1 Register (FEE0 0360H).
+///
+/// This behaves very similarly to a MMIO read-write register, but instead of doing a
+/// volatile read to MMIO to get the value for each function call, a copy of the
+/// register contents are stored locally in memory.
+pub type LvtLint1RegisterLocal = LocalRegisterCopy<u32, LVT_LINT1::Register>;

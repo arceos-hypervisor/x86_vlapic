@@ -1,7 +1,14 @@
 pub mod lvt;
+mod svr;
+pub use svr::*;
 
 use tock_registers::register_structs;
 use tock_registers::registers::{ReadOnly, ReadWrite, WriteOnly};
+
+use lvt::{
+    LvtCmciRegisterMmio, LvtErrorRegisterMmio, LvtLint0RegisterMmio, LvtLint1RegisterMmio,
+    LvtPerformanceCounterRegisterMmio, LvtThermalMonitorRegisterMmio, LvtTimerRegisterMmio,
+};
 
 register_structs! {
     #[allow(non_snake_case)]
@@ -35,7 +42,7 @@ register_structs! {
         (0xE0 => pub DFR: ReadWrite<u32>),
         (0xE4 => _reserved9),
         /// Virtual Spurious Interrupt Vector Register (SVR): the 32-bit field located at offset 0F0H on the virtual-APIC page.
-        (0xF0 => pub SVR: ReadWrite<u32>),
+        (0xF0 => pub SVR: SpuriousInterruptVectorRegisterMmio),
         (0xF4 => _reserved10),
         /// Virtual interrupt-service register (VISR):
         /// the 256-bit value comprising eight non-contiguous 32-bit fields at offsets
@@ -55,30 +62,30 @@ register_structs! {
         (0x280 => pub ESR: ReadWrite<u32>),
         (0x284 => _reserved11),
         /// Virtual LVT Corrected Machine Check Interrupt (CMCI) Register
-        (0x2F0 => pub LVT_CMCI: lvt::LvtCmciRegisterLocal),
+        (0x2F0 => pub LVT_CMCI: LvtCmciRegisterMmio),
         (0x2F4 => _reserved12),
         /// Virtual Interrupt Command Register (ICR): the 64-bit field located at offset 300H on the virtual-APIC page.
         (0x300 => pub ICR_LO: ReadWrite<u32>),
         (0x304 => _reserved13),
         (0x310 => pub ICR_HI: ReadWrite<u32>),
-        (0x30C => _reserved14),
+        (0x314 => _reserved14),
         /// Virtual LVT Timer Register: the 32-bit field located at offset 320H on the virtual-APIC page.
-        (0x320 => pub LVT_TIMER: ReadWrite<u32>),
+        (0x320 => pub LVT_TIMER: LvtTimerRegisterMmio),
         (0x324 => _reserved15),
         /// Virtual LVT Thermal Sensor register: the 32-bit field located at offset 330H on the virtual-APIC page.
-        (0x330 => pub LVT_THERMAL: ReadWrite<u32>),
+        (0x330 => pub LVT_THERMAL: LvtThermalMonitorRegisterMmio),
         (0x334 => _reserved16),
         /// Virtual LVT Performance Monitoring Counters register: the 32-bit field located at offset 340H on the virtual-APIC page.
-        (0x340 => pub LVT_PMI: ReadWrite<u32>),
+        (0x340 => pub LVT_PMI: LvtPerformanceCounterRegisterMmio),
         (0x344 => _reserved17),
         /// Virtual LVT LINT0 register: the 32-bit field located at offset 350H on the virtual-APIC page.
-        (0x350 => pub LVT_LINT0: ReadWrite<u32>),
+        (0x350 => pub LVT_LINT0: LvtLint0RegisterMmio),
         (0x354 => _reserved18),
         /// Virtual LVT LINT1 register: the 32-bit field located at offset 360H on the virtual-APIC page.
-        (0x360 => pub LVT_LINT1: ReadWrite<u32>),
+        (0x360 => pub LVT_LINT1: LvtLint1RegisterMmio),
         (0x364 => _reserved19),
         /// Virtual LVT Error register: the 32-bit field located at offset 370H on the virtual-APIC page.
-        (0x370 => pub LVT_ERROR: ReadWrite<u32>),
+        (0x370 => pub LVT_ERROR: LvtErrorRegisterMmio),
         (0x374 => _reserved20),
         /// Virtual Initial Count Register (for Timer): the 32-bit field located at offset 380H on the virtual-APIC page.
         (0x380 => pub ICR_TIMER: ReadWrite<u32>),
