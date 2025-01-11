@@ -55,7 +55,7 @@ register_bitfields! {
 /// Spurious-Interrupt Vector Register using MMIO.
 /// - Address: FEE0 00F0H
 /// - Value after reset: 0000 00FFH
-/// 
+///
 /// A special situation may occur when a processor raises its task priority to be greater than or equal to the level of the interrupt for which the processor INTR signal is currently being asserted.
 /// If at the time the INTA cycle is issued, the interrupt that was to be dispensed has become masked (programmed by software), the local APIC will deliver a spurious-interrupt vector.
 /// Dispensing the spurious-interrupt vector does not affect the ISR, so the handler for this vector should return without an EOI.
