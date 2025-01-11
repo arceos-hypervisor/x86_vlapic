@@ -1,23 +1,17 @@
 use core::ptr::NonNull;
 
 use axerrno::AxResult;
-use memory_addr::PAGE_SIZE_4K;
 use tock_registers::interfaces::Readable;
 
 use axaddrspace::device::AccessWidth;
-use axaddrspace::{AxMmHal, HostPhysAddr, HostVirtAddr, PhysFrame};
+use axaddrspace::{AxMmHal, HostPhysAddr, PhysFrame};
 use axdevice_base::DeviceRWContext;
 
 use crate::consts::{ApicRegOffset, RESET_SPURIOUS_INTERRUPT_VECTOR};
 use crate::lvt::LocalVectorTable;
 use crate::regs::{LocalAPICRegs, SpuriousInterruptVectorRegisterLocal};
 
-#[repr(align(4096))]
-struct APICAccessPage([u8; PAGE_SIZE_4K]);
-
-static VIRTUAL_APIC_ACCESS_PAGE: APICAccessPage = APICAccessPage([0; PAGE_SIZE_4K]);
-
-// Virtual-APIC Registers.
+/// Virtual-APIC Registers.
 pub struct VirtualApicRegs<H: AxMmHal> {
     /// The virtual-APIC page is a 4-KByte region of memory
     /// that the processor uses to virtualize certain accesses to APIC registers and to manage virtual interrupts.
@@ -34,6 +28,7 @@ pub struct VirtualApicRegs<H: AxMmHal> {
 }
 
 impl<H: AxMmHal> VirtualApicRegs<H> {
+    /// Create new virtual-APIC registers by allocating a 4-KByte page for the virtual-APIC page.
     pub fn new() -> Self {
         let apic_frame = PhysFrame::alloc_zero().expect("allocate virtual-APIC page failed");
         Self {
@@ -46,17 +41,6 @@ impl<H: AxMmHal> VirtualApicRegs<H> {
 
     const fn regs(&self) -> &LocalAPICRegs {
         unsafe { self.virtual_lapic.as_ref() }
-    }
-
-    /// APIC-access address (64 bits).
-    /// This field contains the physical address of the 4-KByte APIC-access page.
-    /// If the “virtualize APIC accesses” VM-execution control is 1,
-    /// access to this page may cause VM exits or be virtualized by the processor.
-    /// See Section 30.4.
-    pub fn virtual_apic_access_addr() -> HostPhysAddr {
-        H::virt_to_phys(HostVirtAddr::from_usize(
-            VIRTUAL_APIC_ACCESS_PAGE.0.as_ptr() as usize,
-        ))
     }
 
     /// Virtual-APIC address (64 bits).
@@ -75,11 +59,6 @@ impl<H: AxMmHal> Drop for VirtualApicRegs<H> {
 }
 
 impl<H: AxMmHal> VirtualApicRegs<H> {
-    /// Returns the host physical address of the virtual-APIC page.
-    pub fn virtual_apic_page_host_paddr(&self) -> HostPhysAddr {
-        self.apic_page.start_paddr()
-    }
-
     pub fn handle_read(
         &self,
         offset: ApicRegOffset,
