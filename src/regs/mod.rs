@@ -1,6 +1,11 @@
 pub mod lvt;
+pub mod timer;
+
 mod svr;
+mod apic_base;
+
 pub use svr::*;
+pub use apic_base::*;
 
 use tock_registers::register_structs;
 use tock_registers::registers::{ReadOnly, ReadWrite, WriteOnly};
@@ -9,6 +14,7 @@ use lvt::{
     LvtCmciRegisterMmio, LvtErrorRegisterMmio, LvtLint0RegisterMmio, LvtLint1RegisterMmio,
     LvtPerformanceCounterRegisterMmio, LvtThermalMonitorRegisterMmio, LvtTimerRegisterMmio,
 };
+use timer::DivideConfigurationRegisterMmio;
 
 register_structs! {
     #[allow(non_snake_case)]
@@ -94,7 +100,7 @@ register_structs! {
         (0x390 => pub CCR_TIMER: ReadOnly<u32>),
         (0x394 => _reserved22),
         /// Virtual Divide Configuration Register (for Timer): the 32-bit field located at offset 3E0H on the virtual-APIC page.
-        (0x3E0 => pub DCR_TIMER: ReadWrite<u32>),
+        (0x3E0 => pub DCR_TIMER: DivideConfigurationRegisterMmio),
         (0x3E4 => _reserved23),
         /// Virtual SELF IPI Register: the 32-bit field located at offset 3F0H on the virtual-APIC page.
         (0x3F0 => pub SELF_IPI: WriteOnly<u32>),
