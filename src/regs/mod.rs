@@ -1,9 +1,11 @@
 pub mod lvt;
 pub mod timer;
 
+mod dfr;
 mod svr;
 mod apic_base;
 
+pub use dfr::*;
 pub use svr::*;
 pub use apic_base::*;
 
@@ -33,7 +35,7 @@ register_structs! {
         (0x90 => pub APR: ReadOnly<u32>),
         (0x94 => _reserved4),
         /// Virtual processor-priority register (VPPR): the 32-bit field located at offset 0A0H on the virtual-APIC page.
-        (0xA0 => pub PPR: ReadOnly<u32>),
+        (0xA0 => pub PPR: ReadWrite<u32>),
         (0xA4 => _reserved5),
         /// Virtual end-of-interrupt register (VEOI): the 32-bit field located at offset 0B0H on the virtual-APIC page.
         (0xB0 => pub EOI: WriteOnly<u32>),
@@ -45,7 +47,7 @@ register_structs! {
         (0xD0 => pub LDR: ReadWrite<u32>),
         (0xD4 => _reserved8),
         /// Virtual Destination Format Register (DFR): the 32-bit field located at offset 0E0H on the virtual-APIC page.
-        (0xE0 => pub DFR: ReadWrite<u32>),
+        (0xE0 => pub DFR: DestinationFormatRegisterMmio),
         (0xE4 => _reserved9),
         /// Virtual Spurious Interrupt Vector Register (SVR): the 32-bit field located at offset 0F0H on the virtual-APIC page.
         (0xF0 => pub SVR: SpuriousInterruptVectorRegisterMmio),
@@ -53,7 +55,7 @@ register_structs! {
         /// Virtual interrupt-service register (VISR):
         /// the 256-bit value comprising eight non-contiguous 32-bit fields at offsets
         /// 100H, 110H, 120H, 130H, 140H, 150H, 160H, and 170H on the virtual-APIC page.
-        (0x100 => pub ISR: [ReadOnly<u128>; 8]),
+        (0x100 => pub ISR: [ReadWrite<u128>; 8]),
         /// Virtual trigger-mode register (VTMR):
         /// the 256-bit value comprising eight non-contiguous 32-bit fields at offsets
         /// 180H, 190H, 1A0H, 1B0H, 1C0H, 1D0H, 1E0H, and 1F0H on the virtual-APIC page.
