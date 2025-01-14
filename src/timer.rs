@@ -1,3 +1,5 @@
+use axerrno::{AxError, AxResult};
+
 /// Local APIC timer modes.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
@@ -48,6 +50,31 @@ impl ApicTimer {
     //         false
     //     }
     // }
+
+    /// Gets the timer mode.
+    pub fn timer_mode(&self) -> TimerMode {
+        self.timer_mode
+    }
+
+    /// Update the timer mode if it is different from the current mode.
+    pub fn update_timer_mode(&mut self, mode: TimerMode) -> AxResult {
+        if self.timer_mode != mode {
+            self.timer_mode = mode;
+            unimplemented!("del timer and update timer")
+        }
+
+        Ok(())
+    }
+
+    pub fn start_timer(&mut self) -> AxResult {
+        unimplemented!("start timer")
+    }
+
+    pub fn delete_timer(&mut self) -> AxResult {
+        self.initial_count = 0;
+        self.deadline_ns = 0;
+        unimplemented!("del timer")
+    }
 
     /// Whether the timer interrupt is masked.
     pub const fn is_masked(&self) -> bool {

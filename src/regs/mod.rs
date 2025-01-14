@@ -1,13 +1,15 @@
 pub mod lvt;
 pub mod timer;
 
-mod dfr;
-mod svr;
 mod apic_base;
+mod dfr;
+mod icr;
+mod svr;
 
-pub use dfr::*;
-pub use svr::*;
 pub use apic_base::*;
+pub use dfr::*;
+pub use icr::*;
+pub use svr::*;
 
 use tock_registers::register_structs;
 use tock_registers::registers::{ReadOnly, ReadWrite, WriteOnly};
@@ -73,9 +75,9 @@ register_structs! {
         (0x2F0 => pub LVT_CMCI: LvtCmciRegisterMmio),
         (0x2F4 => _reserved12),
         /// Virtual Interrupt Command Register (ICR): the 64-bit field located at offset 300H on the virtual-APIC page.
-        (0x300 => pub ICR_LO: ReadWrite<u32>),
+        (0x300 => pub ICR_LO: InterruptCommandRegisterLowMmio),
         (0x304 => _reserved13),
-        (0x310 => pub ICR_HI: ReadWrite<u32>),
+        (0x310 => pub ICR_HI: InterruptCommandRegisterHighMmio),
         (0x314 => _reserved14),
         /// Virtual LVT Timer Register: the 32-bit field located at offset 320H on the virtual-APIC page.
         (0x320 => pub LVT_TIMER: LvtTimerRegisterMmio),
@@ -105,6 +107,7 @@ register_structs! {
         (0x3E0 => pub DCR_TIMER: DivideConfigurationRegisterMmio),
         (0x3E4 => _reserved23),
         /// Virtual SELF IPI Register: the 32-bit field located at offset 3F0H on the virtual-APIC page.
+        /// Available only in x2APIC mode.
         (0x3F0 => pub SELF_IPI: WriteOnly<u32>),
         (0x3F4 => _reserved24),
         (0x1000 => @END),

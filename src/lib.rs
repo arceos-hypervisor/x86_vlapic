@@ -7,11 +7,10 @@ extern crate alloc;
 extern crate log;
 
 mod consts;
-mod lvt;
 mod regs;
 mod timer;
-mod vlapic;
 mod utils;
+mod vlapic;
 
 use alloc::boxed::Box;
 use core::cell::UnsafeCell;
@@ -39,9 +38,9 @@ pub struct EmulatedLocalApic<H: AxMmHal> {
 
 impl<H: AxMmHal> EmulatedLocalApic<H> {
     /// Create a new `EmulatedLocalApic`.
-    pub fn new() -> Self {
+    pub fn new(vcpu_id: u32) -> Self {
         EmulatedLocalApic {
-            vlapic_regs: UnsafeCell::new(VirtualApicRegs::new()),
+            vlapic_regs: UnsafeCell::new(VirtualApicRegs::new(vcpu_id)),
         }
     }
 

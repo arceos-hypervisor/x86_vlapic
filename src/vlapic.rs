@@ -2,18 +2,23 @@ use core::ptr::NonNull;
 
 use axerrno::{AxError, AxResult};
 use bit::BitIndex;
-use tock_registers::interfaces::{Readable, Writeable};
+use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
 use axaddrspace::device::AccessWidth;
 use axaddrspace::{AxMmHal, HostPhysAddr, PhysFrame};
 use axdevice_base::DeviceRWContext;
 
-use crate::consts::{ApicRegOffset, RESET_SPURIOUS_INTERRUPT_VECTOR};
-use crate::lvt::LocalVectorTable;
-use crate::regs::lvt::LVT_TIMER;
+use crate::consts::{
+    APIC_LVT_DS, APIC_LVT_M, APIC_LVT_VECTOR, ApicRegOffset, RESET_SPURIOUS_INTERRUPT_VECTOR,
+};
+use crate::regs::lvt::{
+    LVT_CMCI, LVT_ERROR, LVT_LINT0, LVT_LINT1, LVT_PERFORMANCE_COUNTER, LVT_THERMAL_MONITOR,
+    LVT_TIMER, LocalVectorTable,
+};
 use crate::regs::{
     APIC_BASE, ApicBaseRegisterMsr, LocalAPICRegs, SpuriousInterruptVectorRegisterLocal,
 };
+use crate::regs::{INTERRUPT_COMMAND_HIGH, INTERRUPT_COMMAND_LOW, SPURIOUS_INTERRUPT_VECTOR};
 use crate::timer::{ApicTimer, TimerMode};
 use crate::utils::fls32;
 
@@ -24,6 +29,10 @@ pub struct VirtualApicRegs<H: AxMmHal> {
     /// The physical address of the virtual-APIC page is the virtual-APIC address,
     /// a 64-bit VM-execution control field in the VMCS (see Section 25.6.8).
     virtual_lapic: NonNull<LocalAPICRegs>,
+
+    vapic_id: u32,
+    esr_pending: u32,
+    esr_firing: i32,
 
     virtual_timer: ApicTimer,
 
@@ -43,9 +52,13 @@ pub struct VirtualApicRegs<H: AxMmHal> {
 
 impl<H: AxMmHal> VirtualApicRegs<H> {
     /// Create new virtual-APIC registers by allocating a 4-KByte page for the virtual-APIC page.
-    pub fn new() -> Self {
+    pub fn new(vcpu_id: u32) -> Self {
         let apic_frame = PhysFrame::alloc_zero().expect("allocate virtual-APIC page failed");
         Self {
+            // virtual-APIC ID is the same as the VCPU ID.
+            vapic_id: vcpu_id,
+            esr_pending: 0,
+            esr_firing: 0,
             virtual_lapic: NonNull::new(apic_frame.as_mut_ptr().cast()).unwrap(),
             apic_page: apic_frame,
             svr_last: SpuriousInterruptVectorRegisterLocal::new(RESET_SPURIOUS_INTERRUPT_VECTOR),
@@ -176,6 +189,30 @@ impl<H: AxMmHal> VirtualApicRegs<H> {
         unimplemented!("vcpu_make_request(vlapic2vcpu(vlapic), ACRN_REQUEST_EVENT);")
     }
 
+    /// Post an interrupt to the vcpu running on 'hostcpu'.
+    /// This will use a hardware assist if available (e.g. Posted Interrupt)
+    /// or fall back to sending an 'ipinum' to interrupt the 'hostcpu'.
+    fn set_err(&mut self, mask: u32) {
+        self.esr_pending |= mask;
+        self.esr_firing = 1;
+        if self.esr_firing == 0 {
+            self.esr_firing = 1;
+            let _lvt = self.regs().LVT_ERROR.get();
+            //  if ((lvt & APIC_LVT_M) == 0U) {
+            //     vec = lvt & APIC_LVT_VECTOR;
+            //     if (vec >= 16U) {
+            //         vlapic_accept_intr(vlapic, vec, LAPIC_TRIG_EDGE);
+            //     }
+            // }
+            unimplemented!("vlapic_accept_intr(vlapic, vec, LAPIC_TRIG_EDGE)");
+            // self.esr_firing = 0;
+        }
+    }
+
+    fn handle_self_ipi(&mut self) {
+        unimplemented!("x2apic handle_self_ipi");
+    }
+
     /// Figure 11-13. Logical Destination Register (LDR)
     fn write_ldr(&mut self) {
         const LDR_RESERVED: u32 = 0x00ffffff;
@@ -216,6 +253,219 @@ impl<H: AxMmHal> VirtualApicRegs<H> {
             }
         }
     }
+
+    /// Figure 11-14. Spurious-Interrupt Vector Register (SVR)
+    /// Handle writes to the SVR register.
+    fn write_svr(&mut self) -> AxResult {
+        let new = self.regs().SVR.extract();
+        let old = self.svr_last;
+
+        self.svr_last = new;
+
+        if old.is_set(SPURIOUS_INTERRUPT_VECTOR::APICSoftwareEnableDisable)
+            && !new.is_set(SPURIOUS_INTERRUPT_VECTOR::APICSoftwareEnableDisable)
+        {
+            debug!("[VLAPIC] vlapic [{}] is software-disabled", self.vapic_id);
+            // The apic is now disabled so stop the apic timer
+            // and mask all the LVT entries.
+            self.virtual_timer.delete_timer()?;
+            self.mask_lvts()?;
+            warn!("VM wire mode should be changed to INTR here, unimplemented");
+        } else if !old.is_set(SPURIOUS_INTERRUPT_VECTOR::APICSoftwareEnableDisable)
+            && new.is_set(SPURIOUS_INTERRUPT_VECTOR::APICSoftwareEnableDisable)
+        {
+            debug!("[VLAPIC] vlapic [{}] is software-enabled", self.vapic_id);
+
+            // The apic is now enabled so restart the apic timer
+            // if it is configured in periodic mode.
+            if self.virtual_timer.is_periodic() {
+                debug!("Restarting the apic timer");
+                self.virtual_timer.start_timer()?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn write_esr(&mut self) {
+        let esr = self.regs().ESR.get();
+        debug!("[VLAPIC] write ESR register to {:#010X}", esr);
+        self.regs().ESR.set(self.esr_pending);
+        self.esr_pending = 0;
+    }
+
+    fn write_icr(&mut self) {
+        self.regs()
+            .ICR_LO
+            .modify(INTERRUPT_COMMAND_LOW::DeliveryStatus::Idle);
+
+        let icr_low = self.regs().ICR_LO.extract();
+
+        let (dest, is_broadcast) = if self.is_x2apic_enabled() {
+            use crate::consts::x2apic::X2APIC_BROADCAST_DEST_ID;
+            let dest = self.regs().ICR_HI.get();
+            (dest, dest == X2APIC_BROADCAST_DEST_ID)
+        } else {
+            use crate::consts::xapic::XAPIC_BROADCAST_DEST_ID;
+            let dest = self.regs().ICR_HI.read(INTERRUPT_COMMAND_HIGH::Destination);
+            (dest, dest == XAPIC_BROADCAST_DEST_ID)
+        };
+
+        let vec = icr_low.read(INTERRUPT_COMMAND_LOW::Vector);
+        let mode = icr_low.read(INTERRUPT_COMMAND_LOW::DeliveryMode);
+        let is_phys = icr_low.is_set(INTERRUPT_COMMAND_LOW::DestinationMode);
+        let shorthand = icr_low.read(INTERRUPT_COMMAND_LOW::DestinationShorthand);
+
+        if mode == INTERRUPT_COMMAND_LOW::DeliveryMode::Fixed.value && vec < 16 {
+            // self.set_err();
+        }
+
+    }
+
+    fn extract_lvt_val(&self, offset: ApicRegOffset) -> u32 {
+        match offset {
+            ApicRegOffset::LvtCMCI => self.regs().LVT_CMCI.get(),
+            ApicRegOffset::LvtTimer => self.regs().LVT_TIMER.get(),
+            ApicRegOffset::LvtThermal => self.regs().LVT_THERMAL.get(),
+            ApicRegOffset::LvtPmc => self.regs().LVT_PMI.get(),
+            ApicRegOffset::LvtLint0 => self.regs().LVT_LINT0.get(),
+            ApicRegOffset::LvtLint1 => self.regs().LVT_LINT1.get(),
+            ApicRegOffset::LvtErr => self.regs().LVT_ERROR.get(),
+            _ => {
+                warn!("[VLAPIC] read unsupported APIC register: {:?}", offset);
+                0
+            }
+        }
+    }
+
+    fn write_lvt(&mut self, offset: ApicRegOffset) -> AxResult {
+        let mut val = self.extract_lvt_val(offset);
+
+        if self
+            .regs()
+            .SVR
+            .is_set(SPURIOUS_INTERRUPT_VECTOR::APICSoftwareEnableDisable)
+        {
+            val |= APIC_LVT_M;
+        }
+
+        // Mask::Masked, Delivery Status:SendPending, Vector::SET(0xff)
+        let mut mask = APIC_LVT_M | APIC_LVT_DS | APIC_LVT_VECTOR;
+
+        match offset {
+            ApicRegOffset::LvtTimer => {
+                mask |= LVT_TIMER::TimerMode::SET.mask();
+                val &= mask;
+                self.regs().LVT_TIMER.set(val);
+                self.lvt_last.lvt_timer.set(val);
+
+                let new_timer_mode = self.timer_mode()?;
+                // A write to the LVT Timer Register that changes the timer mode disarms the local APIC timer.
+                if new_timer_mode != self.virtual_timer.timer_mode() {
+                    self.virtual_timer.update_timer_mode(new_timer_mode)?;
+                }
+            }
+            ApicRegOffset::LvtErr => {
+                val &= mask;
+                self.regs().LVT_ERROR.set(val);
+                self.lvt_last.lvt_err.set(val);
+            }
+            ApicRegOffset::LvtLint0 => {
+                mask |= LVT_LINT0::TriggerMode::SET.mask();
+                mask |= LVT_LINT0::RemoteIRR::SET.mask();
+                mask |= LVT_LINT0::InterruptInputPinPolarity::SET.mask();
+                mask |= LVT_LINT0::DeliveryMode::SET.mask();
+                val &= mask;
+
+                // vlapic mask/unmask LINT0 for ExtINT?
+                if (val & LVT_LINT0::DeliveryMode::SET.mask())
+                    == LVT_LINT0::DeliveryMode::ExtINT.mask()
+                {
+                    let last = self.lvt_last.lvt_lint0;
+                    if last.is_set(LVT_LINT0::Mask) && val & LVT_LINT0::Mask::SET.mask() == 0 {
+                        // mask -> unmask: may from every vlapic in the vm
+                        warn!("vpic wire mode change to LAPIC, unimplemented");
+                    } else if !last.is_set(LVT_LINT0::Mask)
+                        && val & LVT_LINT0::Mask::SET.mask() != 0
+                    {
+                        // unmask -> mask: only from the vlapic LINT0-ExtINT enabled
+                        warn!("vpic wire mode change to NULL, unimplemented");
+                    } else {
+                        // APIC_LVT_M unchanged. No action required.
+                    }
+                }
+
+                self.regs().LVT_LINT0.set(val);
+                self.lvt_last.lvt_lint0.set(val);
+            }
+            ApicRegOffset::LvtLint1 => {
+                mask |= LVT_LINT1::TriggerMode::SET.mask();
+                mask |= LVT_LINT1::RemoteIRR::SET.mask();
+                mask |= LVT_LINT1::InterruptInputPinPolarity::SET.mask();
+                mask |= LVT_LINT1::DeliveryMode::SET.mask();
+                val &= mask;
+
+                self.regs().LVT_LINT1.set(val);
+                self.lvt_last.lvt_lint1.set(val);
+            }
+            ApicRegOffset::LvtCMCI => {
+                mask |= LVT_CMCI::DeliveryMode::SET.mask();
+                val &= mask;
+                self.regs().LVT_CMCI.set(val);
+                self.lvt_last.lvt_cmci.set(val);
+            }
+            ApicRegOffset::LvtPmc => {
+                mask |= LVT_PERFORMANCE_COUNTER::DeliveryMode::SET.mask();
+                val &= mask;
+                self.regs().LVT_PMI.set(val);
+                self.lvt_last.lvt_perf_count.set(val);
+            }
+            ApicRegOffset::LvtThermal => {
+                mask |= LVT_THERMAL_MONITOR::DeliveryMode::SET.mask();
+                val &= mask;
+                self.regs().LVT_THERMAL.set(val);
+                self.lvt_last.lvt_thermal.set(val);
+            }
+            _ => {
+                warn!("[VLAPIC] write unsupported APIC register: {:?}", offset);
+                return Err(AxError::InvalidInput);
+            }
+        }
+        Ok(())
+    }
+
+    fn mask_lvts(&mut self) -> AxResult {
+        self.regs().LVT_CMCI.modify(LVT_CMCI::Mask::SET);
+        self.write_lvt(ApicRegOffset::LvtCMCI)?;
+
+        self.regs().LVT_TIMER.modify(LVT_TIMER::Mask::SET);
+        self.write_lvt(ApicRegOffset::LvtTimer)?;
+
+        self.regs()
+            .LVT_THERMAL
+            .modify(LVT_THERMAL_MONITOR::Mask::SET);
+        self.write_lvt(ApicRegOffset::LvtThermal)?;
+
+        self.regs()
+            .LVT_PMI
+            .modify(LVT_PERFORMANCE_COUNTER::Mask::SET);
+        self.write_lvt(ApicRegOffset::LvtPmc)?;
+
+        self.regs().LVT_LINT0.modify(LVT_LINT0::Mask::SET);
+        self.write_lvt(ApicRegOffset::LvtLint0)?;
+
+        self.regs().LVT_LINT1.modify(LVT_LINT1::Mask::SET);
+        self.write_lvt(ApicRegOffset::LvtLint1)?;
+
+        self.regs().LVT_ERROR.modify(LVT_ERROR::Mask::SET);
+        self.write_lvt(ApicRegOffset::LvtErr)?;
+
+        Ok(())
+    }
+
+    fn write_icrtmr(&mut self) {}
+
+    fn write_dcr(&mut self) {}
 }
 
 fn extract_index_u32(vector: u32) -> usize {
@@ -291,7 +541,7 @@ impl<H: AxMmHal> VirtualApicRegs<H> {
                     let icr_hi = self.regs().ICR_HI.get() as usize;
                     value |= icr_hi << 32;
                     debug!("[VLAPIC] read ICR register: {:#018X}", value);
-                } else {
+                } else if self.is_x2apic_enabled() ^ (width == AccessWidth::Qword) {
                     warn!(
                         "[VLAPIC] Illegal read attempt of ICR register at width {:?} with X2APIC {}",
                         width,
@@ -384,10 +634,94 @@ impl<H: AxMmHal> VirtualApicRegs<H> {
                 self.regs().DFR.set(data32);
                 self.write_dfr();
             }
+            ApicRegOffset::SIVR => {
+                self.regs().SVR.set(data32);
+                self.write_svr()?;
+            }
+            ApicRegOffset::ESR => {
+                self.regs().ESR.set(data32);
+                self.write_esr();
+            }
+            ApicRegOffset::ICRLow => {
+                if self.is_x2apic_enabled() && width == AccessWidth::Qword {
+                    debug!("[VLAPIC] write ICR register: {:#018X} in X2APIC mode", val);
+                    self.regs().ICR_HI.set((val >> 32) as u32);
+                } else if self.is_x2apic_enabled() ^ (width == AccessWidth::Qword) {
+                    warn!(
+                        "[VLAPIC] Illegal read attempt of ICR register at width {:?} with X2APIC {}",
+                        width,
+                        if self.is_x2apic_enabled() {
+                            "enabled"
+                        } else {
+                            "disabled"
+                        }
+                    );
+                    return Err(AxError::InvalidInput);
+                }
+                self.regs().ICR_LO.set(data32);
+                self.write_icr();
+            }
+            // Local Vector Table registers.
+            // Local Vector Table registers.
+            ApicRegOffset::LvtCMCI => {
+                self.regs().LVT_CMCI.set(data32);
+                self.write_lvt(offset)?;
+            }
+            ApicRegOffset::LvtTimer => {
+                self.regs().LVT_TIMER.set(data32);
+                self.write_lvt(offset)?;
+            }
+            ApicRegOffset::LvtThermal => {
+                self.regs().LVT_THERMAL.set(data32);
+                self.write_lvt(offset)?;
+            }
+            ApicRegOffset::LvtPmc => {
+                self.regs().LVT_PMI.set(data32);
+                self.write_lvt(offset)?;
+            }
+            ApicRegOffset::LvtLint0 => {
+                self.regs().LVT_LINT0.set(data32);
+                self.write_lvt(offset)?;
+            }
+            ApicRegOffset::LvtLint1 => {
+                self.regs().LVT_LINT1.set(data32);
+                self.write_lvt(offset)?;
+            }
+            ApicRegOffset::LvtErr => {
+                self.regs().LVT_ERROR.set(data32);
+                self.write_lvt(offset)?;
+            }
+            // Timer registers.
+            ApicRegOffset::TimerInitCount => {
+                if self.timer_mode()? == TimerMode::TscDeadline {
+                    warn!(
+                        "[VLAPIC] write TimerInitCount register: ignore icr_timer in TSCDEADLINE mode"
+                    );
+                    return Ok(());
+                }
+                self.regs().ICR_TIMER.set(data32);
+                self.write_icrtmr();
+            }
+            ApicRegOffset::TimerDivConf => {
+                self.regs().DCR_TIMER.set(data32);
+                self.write_dcr();
+            }
+            ApicRegOffset::SelfIPI => {
+                if self.is_x2apic_enabled() {
+                    self.regs().SELF_IPI.set(data32);
+                    self.handle_self_ipi();
+                } else {
+                    warn!("[VLAPIC] write SelfIPI register: unsupported in xAPIC mode");
+                    return Err(AxError::InvalidInput);
+                }
+            }
             _ => {
                 warn!("[VLAPIC] write unsupported APIC register: {:?}", offset);
+                return Err(AxError::InvalidInput);
             }
         }
+
+        debug!("[VLAPIC] write {} register: {:#010X}", offset, val);
 
         Ok(())
     }
