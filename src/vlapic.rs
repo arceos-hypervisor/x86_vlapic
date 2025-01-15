@@ -9,16 +9,21 @@ use axaddrspace::{AxMmHal, HostPhysAddr, PhysFrame};
 use axdevice_base::DeviceRWContext;
 
 use crate::consts::{
-    APIC_LVT_DS, APIC_LVT_M, APIC_LVT_VECTOR, ApicRegOffset, RESET_SPURIOUS_INTERRUPT_VECTOR,
+    APIC_LVT_DS, APIC_LVT_M, APIC_LVT_VECTOR, ApicRegOffset, LAPIC_TRIG_EDGE,
+    RESET_SPURIOUS_INTERRUPT_VECTOR,
 };
+use crate::regs::INTERRUPT_COMMAND_LOW::DeliveryMode::Value as APICDeliveryMode;
+use crate::regs::INTERRUPT_COMMAND_LOW::DestinationShorthand::Value as APICDestination;
 use crate::regs::lvt::{
     LVT_CMCI, LVT_ERROR, LVT_LINT0, LVT_LINT1, LVT_PERFORMANCE_COUNTER, LVT_THERMAL_MONITOR,
     LVT_TIMER, LocalVectorTable,
 };
+use crate::regs::{APIC_BASE, ApicBaseRegisterMsr, LocalAPICRegs};
+use crate::regs::{ERROR_STATUS, ErrorStatusRegisterLocal, ErrorStatusRegisterValue};
 use crate::regs::{
-    APIC_BASE, ApicBaseRegisterMsr, LocalAPICRegs, SpuriousInterruptVectorRegisterLocal,
+    INTERRUPT_COMMAND_HIGH, INTERRUPT_COMMAND_LOW, InterruptCommandRegisterLowLocal,
 };
-use crate::regs::{INTERRUPT_COMMAND_HIGH, INTERRUPT_COMMAND_LOW, SPURIOUS_INTERRUPT_VECTOR};
+use crate::regs::{SPURIOUS_INTERRUPT_VECTOR, SpuriousInterruptVectorRegisterLocal};
 use crate::timer::{ApicTimer, TimerMode};
 use crate::utils::fls32;
 
@@ -30,8 +35,9 @@ pub struct VirtualApicRegs<H: AxMmHal> {
     /// a 64-bit VM-execution control field in the VMCS (see Section 25.6.8).
     virtual_lapic: NonNull<LocalAPICRegs>,
 
+    /// Todo: distinguish between APIC ID and vCPU ID.
     vapic_id: u32,
-    esr_pending: u32,
+    esr_pending: ErrorStatusRegisterLocal,
     esr_firing: i32,
 
     virtual_timer: ApicTimer,
@@ -57,7 +63,7 @@ impl<H: AxMmHal> VirtualApicRegs<H> {
         Self {
             // virtual-APIC ID is the same as the VCPU ID.
             vapic_id: vcpu_id,
-            esr_pending: 0,
+            esr_pending: ErrorStatusRegisterLocal::new(0),
             esr_firing: 0,
             virtual_lapic: NonNull::new(apic_frame.as_mut_ptr().cast()).unwrap(),
             apic_page: apic_frame,
@@ -192,8 +198,9 @@ impl<H: AxMmHal> VirtualApicRegs<H> {
     /// Post an interrupt to the vcpu running on 'hostcpu'.
     /// This will use a hardware assist if available (e.g. Posted Interrupt)
     /// or fall back to sending an 'ipinum' to interrupt the 'hostcpu'.
-    fn set_err(&mut self, mask: u32) {
-        self.esr_pending |= mask;
+    fn set_err(&mut self, mask: ErrorStatusRegisterValue) {
+        self.esr_pending.modify(mask);
+
         self.esr_firing = 1;
         if self.esr_firing == 0 {
             self.esr_firing = 1;
@@ -209,8 +216,90 @@ impl<H: AxMmHal> VirtualApicRegs<H> {
         }
     }
 
+    /// This function populates 'dmask' with the set of vcpus that match the
+    /// addressing specified by the (dest, phys, lowprio) tuple.
+    fn calculate_dest_no_shorthand(
+        &self,
+        is_broadcast: bool,
+        dest: u32,
+        is_phys: bool,
+        lowprio: bool,
+    ) -> u64 {
+        let mut dmask = 0;
+
+        if is_broadcast {
+            // Broadcast in both logical and physical modes.
+            dmask = 0xffffffff;
+        } else if is_phys {
+            // Physical mode: "dest" is local APIC ID.
+            // Todo: distinguish between APIC ID and vCPU ID.
+            dmask = 1 << dest;
+        } else {
+            // Logical mode: "dest" is message destination addr
+            // to be compared with the logical APIC ID in LDR.
+            let _ = lowprio;
+            unimplemented!("logical mode");
+        }
+
+        dmask
+    }
+
+    fn calculate_dest(
+        &self,
+        shorthand: APICDestination,
+        is_broadcast: bool,
+        dest: u32,
+        is_phys: bool,
+        lowprio: bool,
+    ) -> u64 {
+        let mut dmask = 0;
+        match shorthand {
+            APICDestination::NoShorthand => {
+                dmask = self.calculate_dest_no_shorthand(is_broadcast, dest, is_phys, lowprio);
+            }
+            APICDestination::SELF => {
+                dmask.set_bit(self.vapic_id as usize, true);
+            }
+            APICDestination::AllIncludingSelf => {
+                dmask = 0xffffffff;
+            }
+            APICDestination::AllExcludingSelf => {
+                dmask = 0xffffffff & !(1 << self.vapic_id);
+            }
+        }
+
+        dmask
+    }
+
     fn handle_self_ipi(&mut self) {
         unimplemented!("x2apic handle_self_ipi");
+    }
+
+    fn set_intr(&mut self, vcpu_id: u32, vector: u32, level: bool) {
+        unimplemented!(
+            "set_intr, vcpu_id: {}, vector: {}, level: {}",
+            vcpu_id,
+            vector,
+            level
+        );
+    }
+
+    fn inject_nmi(&mut self, vcpu_id: u32) {
+        unimplemented!("inject_nmi vcpu_id: {}", vcpu_id);
+    }
+
+    fn process_init_sipi(
+        &mut self,
+        vcpu_id: u32,
+        mode: APICDeliveryMode,
+        icr_low: InterruptCommandRegisterLowLocal,
+    ) {
+        unimplemented!(
+            "process_init_sipi, vcpu_id: {}, mode: {:?} icr_low: {:#010X}",
+            vcpu_id,
+            mode,
+            icr_low.get()
+        );
     }
 
     /// Figure 11-13. Logical Destination Register (LDR)
@@ -290,11 +379,11 @@ impl<H: AxMmHal> VirtualApicRegs<H> {
     fn write_esr(&mut self) {
         let esr = self.regs().ESR.get();
         debug!("[VLAPIC] write ESR register to {:#010X}", esr);
-        self.regs().ESR.set(self.esr_pending);
-        self.esr_pending = 0;
+        self.regs().ESR.set(self.esr_pending.get());
+        self.esr_pending.set(0);
     }
 
-    fn write_icr(&mut self) {
+    fn write_icr(&mut self) -> AxResult {
         self.regs()
             .ICR_LO
             .modify(INTERRUPT_COMMAND_LOW::DeliveryStatus::Idle);
@@ -312,14 +401,60 @@ impl<H: AxMmHal> VirtualApicRegs<H> {
         };
 
         let vec = icr_low.read(INTERRUPT_COMMAND_LOW::Vector);
-        let mode = icr_low.read(INTERRUPT_COMMAND_LOW::DeliveryMode);
+        let mode = icr_low
+            .read_as_enum::<APICDeliveryMode>(INTERRUPT_COMMAND_LOW::DeliveryMode)
+            .ok_or(AxError::InvalidData)?;
         let is_phys = icr_low.is_set(INTERRUPT_COMMAND_LOW::DestinationMode);
-        let shorthand = icr_low.read(INTERRUPT_COMMAND_LOW::DestinationShorthand);
+        let shorthand = icr_low
+            .read_as_enum::<APICDestination>(INTERRUPT_COMMAND_LOW::DestinationShorthand)
+            .ok_or(AxError::InvalidData)?;
 
-        if mode == INTERRUPT_COMMAND_LOW::DeliveryMode::Fixed.value && vec < 16 {
-            // self.set_err();
+        if mode == APICDeliveryMode::Fixed && vec < 16 {
+            self.set_err(ERROR_STATUS::SendIllegalVector::SET);
+            debug!("[VLAPIC] Ignoring invalid IPI {:#010X}", vec);
+        } else if (shorthand == APICDestination::SELF
+            || shorthand == APICDestination::AllIncludingSelf)
+            && (mode == APICDeliveryMode::NMI
+                || mode == APICDeliveryMode::INIT
+                || mode == APICDeliveryMode::StartUp)
+        {
+            debug!("[VLAPIC] Invalid ICR value {:#010X}", vec);
+        } else {
+            debug!(
+                "icrlow {:#010X} icrhi {:#010X} triggered ipi {:#010X}",
+                icr_low.get(),
+                self.regs().ICR_HI.get(),
+                vec
+            );
+            let dmask = self.calculate_dest(shorthand, is_broadcast, dest, is_phys, false);
+
+            // TODO: we need to get the specific vcpu number somehow.
+            for i in 0..64 {
+                if dmask & (1 << i) != 0 {
+                    match mode {
+                        APICDeliveryMode::Fixed => {
+                            self.set_intr(i, vec, LAPIC_TRIG_EDGE);
+                            debug!("[VLAPIC] sending IPI {} to vcpu {}", vec, i);
+                        }
+                        APICDeliveryMode::NMI => {
+                            self.inject_nmi(i);
+                            debug!("[VLAPIC] sending NMI to vcpu {}", i);
+                        }
+                        APICDeliveryMode::INIT | APICDeliveryMode::StartUp => {
+                            self.process_init_sipi(i, mode, icr_low);
+                        }
+                        APICDeliveryMode::SMI => {
+                            warn!("[VLPAIC] SMI IPI do not support");
+                        }
+                        _ => {
+                            error!("Unhandled icrlo write with mode {:?}\n", mode);
+                        }
+                    }
+                }
+            }
         }
 
+        Ok(())
     }
 
     fn extract_lvt_val(&self, offset: ApicRegOffset) -> u32 {
@@ -659,9 +794,8 @@ impl<H: AxMmHal> VirtualApicRegs<H> {
                     return Err(AxError::InvalidInput);
                 }
                 self.regs().ICR_LO.set(data32);
-                self.write_icr();
+                self.write_icr()?;
             }
-            // Local Vector Table registers.
             // Local Vector Table registers.
             ApicRegOffset::LvtCMCI => {
                 self.regs().LVT_CMCI.set(data32);

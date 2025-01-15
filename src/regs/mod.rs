@@ -5,11 +5,13 @@ mod apic_base;
 mod dfr;
 mod icr;
 mod svr;
+mod esr;
 
 pub use apic_base::*;
 pub use dfr::*;
 pub use icr::*;
 pub use svr::*;
+pub use esr::*;
 
 use tock_registers::register_structs;
 use tock_registers::registers::{ReadOnly, ReadWrite, WriteOnly};
@@ -69,7 +71,7 @@ register_structs! {
         /// The processor uses only the low 4 bytes of each of the 16-Byte fields at offsets 200H, 210H, 220H, 230H, 240H, 250H, 260H, and 270H.
         (0x200 => pub IRR: [ReadOnly<u128>; 8]),
         /// Virtual error-status register (VESR): the 32-bit field located at offset 280H on the virtual-APIC page.
-        (0x280 => pub ESR: ReadWrite<u32>),
+        (0x280 => pub ESR: ErrorStatusRegisterMmio),
         (0x284 => _reserved11),
         /// Virtual LVT Corrected Machine Check Interrupt (CMCI) Register
         (0x2F0 => pub LVT_CMCI: LvtCmciRegisterMmio),

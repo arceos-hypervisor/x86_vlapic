@@ -1,4 +1,4 @@
-use axerrno::{AxError, AxResult};
+use axerrno::AxResult;
 
 /// Local APIC timer modes.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]

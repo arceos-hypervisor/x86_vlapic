@@ -16,8 +16,6 @@ pub use perfmon::*;
 pub use thermal::*;
 pub use timer::*;
 
-use tock_registers::LocalRegisterCopy;
-
 use crate::consts::RESET_LVT_REG;
 
 /// A read-write copy of LVT registers.

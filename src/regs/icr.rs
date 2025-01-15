@@ -2,6 +2,7 @@
 //! The interrupt command register (ICR) is a 64-bit1 local APIC register (see Figure 11-12)
 //! that allows software running on the processor to specify and send interprocessor interrupts (IPIs) to other processors in the system.
 
+use tock_registers::LocalRegisterCopy;
 use tock_registers::register_bitfields;
 use tock_registers::registers::ReadWrite;
 
@@ -144,6 +145,12 @@ register_bitfields! {
 /// - Address: FEE0 0300H (0 - 31)
 /// - Value after Reset: 0H
 pub type InterruptCommandRegisterLowMmio = ReadWrite<u32, INTERRUPT_COMMAND_LOW::Register>;
+
+/// A read-write copy of Interrupt Command Register (ICR) LOW.
+/// This behaves very similarly to a MMIO read-write register, but instead of doing a
+/// volatile read to MMIO to get the value for each function call, a copy of the
+/// register contents are stored locally in memory.
+pub type InterruptCommandRegisterLowLocal = LocalRegisterCopy<u32, INTERRUPT_COMMAND_LOW::Register>;
 
 /// Interrupt Command Register (ICR) HIGH using MMIO.
 /// - Address: FEE0 0310H (32 - 63)

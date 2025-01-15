@@ -198,6 +198,9 @@ pub const RESET_LVT_REG: u32 = APIC_LVT_M;
 /// - Value after reset: 0000 00FFH
 pub const RESET_SPURIOUS_INTERRUPT_VECTOR: u32 = 0x0000_00FF;
 
+pub const LAPIC_TRIG_LEVEL: bool = true;
+pub const LAPIC_TRIG_EDGE: bool = false;
+
 pub mod xapic {
     use axaddrspace::GuestPhysAddr;
 
@@ -221,7 +224,7 @@ pub mod x2apic {
     pub const X2APIC_MSE_REG_BASE: usize = 0x800;
     pub const X2APIC_MSE_REG_SIZE: usize = 0x100;
 
-    /// A destination ID value of FFFF_FFFFH is used for broadcast of interrupts 
+    /// A destination ID value of FFFF_FFFFH is used for broadcast of interrupts
     /// in both logical destination and physical destination modes.
     pub const X2APIC_BROADCAST_DEST_ID: u32 = 0xFFFF_FFFF;
 
