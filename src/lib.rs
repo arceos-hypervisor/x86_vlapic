@@ -7,6 +7,7 @@ extern crate alloc;
 extern crate log;
 
 mod consts;
+mod hal;
 mod regs;
 mod timer;
 mod utils;
@@ -14,6 +15,7 @@ mod vlapic;
 
 use alloc::boxed::Box;
 use core::cell::UnsafeCell;
+use hal::AxVMHal;
 
 use axerrno::AxResult;
 use memory_addr::{AddrRange, PAGE_SIZE_4K};
@@ -32,11 +34,11 @@ struct APICAccessPage([u8; PAGE_SIZE_4K]);
 static VIRTUAL_APIC_ACCESS_PAGE: APICAccessPage = APICAccessPage([0; PAGE_SIZE_4K]);
 
 /// A emulated local APIC device.
-pub struct EmulatedLocalApic<H: AxMmHal> {
-    vlapic_regs: UnsafeCell<VirtualApicRegs<H>>,
+pub struct EmulatedLocalApic<H: AxMmHal, VM: AxVMHal> {
+    vlapic_regs: UnsafeCell<VirtualApicRegs<H, VM>>,
 }
 
-impl<H: AxMmHal> EmulatedLocalApic<H> {
+impl<H: AxMmHal, VM: AxVMHal> EmulatedLocalApic<H, VM> {
     /// Create a new `EmulatedLocalApic`.
     pub fn new(vcpu_id: u32) -> Self {
         EmulatedLocalApic {
@@ -44,16 +46,16 @@ impl<H: AxMmHal> EmulatedLocalApic<H> {
         }
     }
 
-    fn get_vlapic_regs(&self) -> &VirtualApicRegs<H> {
+    fn get_vlapic_regs(&self) -> &VirtualApicRegs<H, VM> {
         unsafe { &*self.vlapic_regs.get() }
     }
 
-    fn get_mut_vlapic_regs(&self) -> &mut VirtualApicRegs<H> {
+    fn get_mut_vlapic_regs(&self) -> &mut VirtualApicRegs<H, VM> {
         unsafe { &mut *self.vlapic_regs.get() }
     }
 }
 
-impl<H: AxMmHal> EmulatedLocalApic<H> {
+impl<H: AxMmHal, VM: AxVMHal> EmulatedLocalApic<H, VM> {
     /// APIC-access address (64 bits).
     /// This field contains the physical address of the 4-KByte APIC-access page.
     /// If the “virtualize APIC accesses” VM-execution control is 1,
@@ -74,7 +76,7 @@ impl<H: AxMmHal> EmulatedLocalApic<H> {
     }
 }
 
-impl<H: AxMmHal> BaseDeviceOps<AddrRange<GuestPhysAddr>> for EmulatedLocalApic<H> {
+impl<H: AxMmHal, VM: AxVMHal> BaseDeviceOps<AddrRange<GuestPhysAddr>> for EmulatedLocalApic<H, VM> {
     fn emu_type(&self) -> EmuDeviceType {
         EmuDeviceType::EmuDeviceTInterruptController
     }
@@ -122,7 +124,7 @@ impl<H: AxMmHal> BaseDeviceOps<AddrRange<GuestPhysAddr>> for EmulatedLocalApic<H
     }
 }
 
-impl<H: AxMmHal> BaseDeviceOps<SysRegAddrRange> for EmulatedLocalApic<H> {
+impl<H: AxMmHal, VM: AxVMHal> BaseDeviceOps<SysRegAddrRange> for EmulatedLocalApic<H, VM> {
     fn emu_type(&self) -> EmuDeviceType {
         EmuDeviceType::EmuDeviceTInterruptController
     }

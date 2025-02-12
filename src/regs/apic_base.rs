@@ -1,8 +1,8 @@
-//! 11.4.4 Local APIC Status and Location 
-//! The status and location of the local APIC are contained in the IA32_APIC_BASE MSR (see Figure 11-5). 
+//! 11.4.4 Local APIC Status and Location
+//! The status and location of the local APIC are contained in the IA32_APIC_BASE MSR (see Figure 11-5).
 //! Figure 11-26. IA32_APIC_BASE MSR Supporting x2APIC
-//! Processor support for x2APIC mode can be detected by executing CPUID with EAX=1 and then checking ECX, bit 21 ECX. 
-//! If CPUID.(EAX=1):ECX.21 is set , the processor supports the x2APIC capability and can be placed into the x2APIC mode. 
+//! Processor support for x2APIC mode can be detected by executing CPUID with EAX=1 and then checking ECX, bit 21 ECX.
+//! If CPUID.(EAX=1):ECX.21 is set , the processor supports the x2APIC capability and can be placed into the x2APIC mode.
 //! System software can place the local APIC in the x2APIC mode by setting the x2APIC mode enable bit (bit 10) in the IA32_APIC_BASE MSR at MSR address 01BH.
 
 use tock_registers::LocalRegisterCopy;

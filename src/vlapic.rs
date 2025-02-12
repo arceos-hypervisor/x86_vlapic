@@ -1,3 +1,4 @@
+use core::marker::PhantomData;
 use core::ptr::NonNull;
 
 use axerrno::{AxError, AxResult};
@@ -12,13 +13,15 @@ use crate::consts::{
     APIC_LVT_DS, APIC_LVT_M, APIC_LVT_VECTOR, ApicRegOffset, LAPIC_TRIG_EDGE,
     RESET_SPURIOUS_INTERRUPT_VECTOR,
 };
+use crate::hal::AxVMHal;
+use crate::regs::DESTINATION_FORMAT::Model::Value as APICDestinationFormat;
 use crate::regs::INTERRUPT_COMMAND_LOW::DeliveryMode::Value as APICDeliveryMode;
 use crate::regs::INTERRUPT_COMMAND_LOW::DestinationShorthand::Value as APICDestination;
 use crate::regs::lvt::{
     LVT_CMCI, LVT_ERROR, LVT_LINT0, LVT_LINT1, LVT_PERFORMANCE_COUNTER, LVT_THERMAL_MONITOR,
     LVT_TIMER, LocalVectorTable,
 };
-use crate::regs::{APIC_BASE, ApicBaseRegisterMsr, LocalAPICRegs};
+use crate::regs::{APIC_BASE, ApicBaseRegisterMsr, DESTINATION_FORMAT, LocalAPICRegs};
 use crate::regs::{ERROR_STATUS, ErrorStatusRegisterLocal, ErrorStatusRegisterValue};
 use crate::regs::{
     INTERRUPT_COMMAND_HIGH, INTERRUPT_COMMAND_LOW, InterruptCommandRegisterLowLocal,
@@ -28,7 +31,7 @@ use crate::timer::{ApicTimer, TimerMode};
 use crate::utils::fls32;
 
 /// Virtual-APIC Registers.
-pub struct VirtualApicRegs<H: AxMmHal> {
+pub struct VirtualApicRegs<H: AxMmHal, VM: AxVMHal> {
     /// The virtual-APIC page is a 4-KByte region of memory
     /// that the processor uses to virtualize certain accesses to APIC registers and to manage virtual interrupts.
     /// The physical address of the virtual-APIC page is the virtual-APIC address,
@@ -54,9 +57,10 @@ pub struct VirtualApicRegs<H: AxMmHal> {
     /// to maintain a coherent snapshot of the register (e.g. lvt_last)
     lvt_last: LocalVectorTable,
     apic_page: PhysFrame<H>,
+    _marker: PhantomData<VM>,
 }
 
-impl<H: AxMmHal> VirtualApicRegs<H> {
+impl<H: AxMmHal, VM: AxVMHal> VirtualApicRegs<H, VM> {
     /// Create new virtual-APIC registers by allocating a 4-KByte page for the virtual-APIC page.
     pub fn new(vcpu_id: u32) -> Self {
         let apic_frame = PhysFrame::alloc_zero().expect("allocate virtual-APIC page failed");
@@ -72,6 +76,7 @@ impl<H: AxMmHal> VirtualApicRegs<H> {
             isrv: 0,
             apic_base: ApicBaseRegisterMsr::new(0),
             virtual_timer: ApicTimer::new(),
+            _marker: PhantomData,
         }
     }
 
@@ -216,6 +221,49 @@ impl<H: AxMmHal> VirtualApicRegs<H> {
         }
     }
 
+    fn is_dest_field_matched(&self, dest: u32) -> AxResult<bool> {
+        let mut ret = false;
+
+        let ldr = self.regs().LDR.get();
+
+        if self.is_x2apic_enabled() {
+            return Ok(true);
+        } else {
+            match self
+                .regs()
+                .DFR
+                .read_as_enum::<APICDestinationFormat>(DESTINATION_FORMAT::Model)
+                .ok_or(AxError::InvalidData)?
+            {
+                APICDestinationFormat::Flat => {
+                    /*
+                     * In the "Flat Model" the MDA is interpreted as an 8-bit wide
+                     * bitmask. This model is available in the xAPIC mode only.
+                     */
+                    let logical_id = ldr >> 24;
+                    let dest_logical_id = dest & 0xff;
+                    if logical_id & dest_logical_id != 0 {
+                        ret = true;
+                    }
+                }
+                APICDestinationFormat::Cluster => {
+                    /*
+                     * In the "Cluster Model" the MDA is used to identify a
+                     * specific cluster and a set of APICs in that cluster.
+                     */
+                    let logical_id = (ldr >> 24) & 0xf;
+                    let cluster_id = ldr >> 28;
+                    let dest_logical_id = dest & 0xf;
+                    let dest_cluster_id = (dest >> 4) & 0xf;
+                    if (cluster_id == dest_cluster_id) && ((logical_id & dest_logical_id) != 0) {
+                        ret = true;
+                    }
+                }
+            }
+        }
+        Ok(ret)
+    }
+
     /// This function populates 'dmask' with the set of vcpus that match the
     /// addressing specified by the (dest, phys, lowprio) tuple.
     fn calculate_dest_no_shorthand(
@@ -224,24 +272,36 @@ impl<H: AxMmHal> VirtualApicRegs<H> {
         dest: u32,
         is_phys: bool,
         lowprio: bool,
-    ) -> u64 {
+    ) -> AxResult<u64> {
         let mut dmask = 0;
 
         if is_broadcast {
             // Broadcast in both logical and physical modes.
-            dmask = 0xffffffff;
+            dmask = VM::active_vcpus() as u64;
         } else if is_phys {
             // Physical mode: "dest" is local APIC ID.
             // Todo: distinguish between APIC ID and vCPU ID.
             dmask = 1 << dest;
+        } else if lowprio {
+            // lowprio is not supported.
+            // Refer to 11.6.2.4 Lowest Priority Delivery Mode.
+            unimplemented!("lowprio");
         } else {
             // Logical mode: "dest" is message destination addr
             // to be compared with the logical APIC ID in LDR.
-            let _ = lowprio;
-            unimplemented!("logical mode");
+
+            let vcpu_mask = VM::active_vcpus();
+            for i in 0..VM::vcpu_num() {
+                if vcpu_mask & (1 << i) != 0 {
+                    if !self.is_dest_field_matched(dest)? {
+                        continue;
+                    }
+                    dmask |= 1 << i;
+                }
+            }
         }
 
-        dmask
+        Ok(dmask)
     }
 
     fn calculate_dest(
@@ -251,24 +311,25 @@ impl<H: AxMmHal> VirtualApicRegs<H> {
         dest: u32,
         is_phys: bool,
         lowprio: bool,
-    ) -> u64 {
+    ) -> AxResult<u64> {
         let mut dmask = 0;
         match shorthand {
             APICDestination::NoShorthand => {
-                dmask = self.calculate_dest_no_shorthand(is_broadcast, dest, is_phys, lowprio);
+                dmask = self.calculate_dest_no_shorthand(is_broadcast, dest, is_phys, lowprio)?;
             }
             APICDestination::SELF => {
                 dmask.set_bit(self.vapic_id as usize, true);
             }
             APICDestination::AllIncludingSelf => {
-                dmask = 0xffffffff;
+                dmask = VM::active_vcpus() as u64;
             }
             APICDestination::AllExcludingSelf => {
-                dmask = 0xffffffff & !(1 << self.vapic_id);
+                dmask = VM::active_vcpus() as u64;
+                dmask &= !(1 << self.vapic_id);
             }
         }
 
-        dmask
+        Ok(dmask)
     }
 
     fn handle_self_ipi(&mut self) {
@@ -426,10 +487,10 @@ impl<H: AxMmHal> VirtualApicRegs<H> {
                 self.regs().ICR_HI.get(),
                 vec
             );
-            let dmask = self.calculate_dest(shorthand, is_broadcast, dest, is_phys, false);
+            let dmask = self.calculate_dest(shorthand, is_broadcast, dest, is_phys, false)?;
 
             // TODO: we need to get the specific vcpu number somehow.
-            for i in 0..64 {
+            for i in 0..VM::vcpu_num() as u32 {
                 if dmask & (1 << i) != 0 {
                     match mode {
                         APICDeliveryMode::Fixed => {
@@ -618,13 +679,13 @@ fn prio(x: u32) -> u32 {
     (x >> 4) & 0xf
 }
 
-impl<H: AxMmHal> Drop for VirtualApicRegs<H> {
+impl<H: AxMmHal, VM: AxVMHal> Drop for VirtualApicRegs<H, VM> {
     fn drop(&mut self) {
         H::dealloc_frame(self.apic_page.start_paddr());
     }
 }
 
-impl<H: AxMmHal> VirtualApicRegs<H> {
+impl<H: AxMmHal, VM: AxVMHal> VirtualApicRegs<H, VM> {
     pub fn handle_read(
         &self,
         offset: ApicRegOffset,
@@ -827,6 +888,7 @@ impl<H: AxMmHal> VirtualApicRegs<H> {
             }
             // Timer registers.
             ApicRegOffset::TimerInitCount => {
+                // if TSCDEADLINE mode ignore icr_timer
                 if self.timer_mode()? == TimerMode::TscDeadline {
                     warn!(
                         "[VLAPIC] write TimerInitCount register: ignore icr_timer in TSCDEADLINE mode"

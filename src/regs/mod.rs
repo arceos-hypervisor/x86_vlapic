@@ -3,15 +3,15 @@ pub mod timer;
 
 mod apic_base;
 mod dfr;
+mod esr;
 mod icr;
 mod svr;
-mod esr;
 
 pub use apic_base::*;
 pub use dfr::*;
+pub use esr::*;
 pub use icr::*;
 pub use svr::*;
-pub use esr::*;
 
 use tock_registers::register_structs;
 use tock_registers::registers::{ReadOnly, ReadWrite, WriteOnly};

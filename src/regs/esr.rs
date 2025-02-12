@@ -2,8 +2,8 @@
 //! 11.5.3 Error Handling
 //! The local APIC records errors detected during interrupt handling in the error status register (ESR).
 
-use tock_registers::fields::FieldValue;
 use tock_registers::LocalRegisterCopy;
+use tock_registers::fields::FieldValue;
 use tock_registers::register_bitfields;
 use tock_registers::registers::ReadWrite;
 
@@ -62,6 +62,5 @@ pub type ErrorStatusRegisterMmio = ReadWrite<u32, ERROR_STATUS::Register>;
 /// volatile read to MMIO to get the value for each function call, a copy of the
 /// register contents are stored locally in memory.
 pub type ErrorStatusRegisterLocal = LocalRegisterCopy<u32, ERROR_STATUS::Register>;
-
 
 pub type ErrorStatusRegisterValue = FieldValue<u32, ERROR_STATUS::Register>;
