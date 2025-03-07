@@ -13,7 +13,6 @@ use crate::consts::{
     APIC_LVT_DS, APIC_LVT_M, APIC_LVT_VECTOR, ApicRegOffset, LAPIC_TRIG_EDGE,
     RESET_SPURIOUS_INTERRUPT_VECTOR,
 };
-use crate::hal::AxVMHal;
 use crate::regs::DESTINATION_FORMAT::Model::Value as APICDestinationFormat;
 use crate::regs::INTERRUPT_COMMAND_LOW::DeliveryMode::Value as APICDeliveryMode;
 use crate::regs::INTERRUPT_COMMAND_LOW::DestinationShorthand::Value as APICDestination;
@@ -31,7 +30,7 @@ use crate::timer::{ApicTimer, TimerMode};
 use crate::utils::fls32;
 
 /// Virtual-APIC Registers.
-pub struct VirtualApicRegs<H: AxMmHal, VM: AxVMHal> {
+pub struct VirtualApicRegs<H: AxMmHal> {
     /// The virtual-APIC page is a 4-KByte region of memory
     /// that the processor uses to virtualize certain accesses to APIC registers and to manage virtual interrupts.
     /// The physical address of the virtual-APIC page is the virtual-APIC address,
@@ -57,12 +56,11 @@ pub struct VirtualApicRegs<H: AxMmHal, VM: AxVMHal> {
     /// to maintain a coherent snapshot of the register (e.g. lvt_last)
     lvt_last: LocalVectorTable,
     apic_page: PhysFrame<H>,
-    _marker: PhantomData<VM>,
 }
 
-impl<H: AxMmHal, VM: AxVMHal> VirtualApicRegs<H, VM> {
+impl<H: AxMmHal> VirtualApicRegs<H> {
     /// Create new virtual-APIC registers by allocating a 4-KByte page for the virtual-APIC page.
-    pub fn new(vcpu_id: u32) -> Self {
+    pub fn new(vm_id: u32, vcpu_id: u32) -> Self {
         let apic_frame = PhysFrame::alloc_zero().expect("allocate virtual-APIC page failed");
         Self {
             // virtual-APIC ID is the same as the VCPU ID.
@@ -75,8 +73,7 @@ impl<H: AxMmHal, VM: AxVMHal> VirtualApicRegs<H, VM> {
             lvt_last: LocalVectorTable::default(),
             isrv: 0,
             apic_base: ApicBaseRegisterMsr::new(0),
-            virtual_timer: ApicTimer::new(),
-            _marker: PhantomData,
+            virtual_timer: ApicTimer::new(vm_id as _, vcpu_id as _),
         }
     }
 
@@ -277,7 +274,7 @@ impl<H: AxMmHal, VM: AxVMHal> VirtualApicRegs<H, VM> {
 
         if is_broadcast {
             // Broadcast in both logical and physical modes.
-            dmask = VM::active_vcpus() as u64;
+            dmask = axvisor_api::vmm::active_vcpus(axvisor_api::vmm::current_vm_id()) as u64;
         } else if is_phys {
             // Physical mode: "dest" is local APIC ID.
             // Todo: distinguish between APIC ID and vCPU ID.
@@ -290,8 +287,8 @@ impl<H: AxMmHal, VM: AxVMHal> VirtualApicRegs<H, VM> {
             // Logical mode: "dest" is message destination addr
             // to be compared with the logical APIC ID in LDR.
 
-            let vcpu_mask = VM::active_vcpus();
-            for i in 0..VM::vcpu_num() {
+            let vcpu_mask = axvisor_api::vmm::active_vcpus(axvisor_api::vmm::current_vm_id());
+            for i in 0..axvisor_api::vmm::vcpu_num(axvisor_api::vmm::current_vm_id()) {
                 if vcpu_mask & (1 << i) != 0 {
                     if !self.is_dest_field_matched(dest)? {
                         continue;
@@ -321,10 +318,10 @@ impl<H: AxMmHal, VM: AxVMHal> VirtualApicRegs<H, VM> {
                 dmask.set_bit(self.vapic_id as usize, true);
             }
             APICDestination::AllIncludingSelf => {
-                dmask = VM::active_vcpus() as u64;
+                dmask = axvisor_api::vmm::active_vcpus(axvisor_api::vmm::current_vm_id()) as u64;
             }
             APICDestination::AllExcludingSelf => {
-                dmask = VM::active_vcpus() as u64;
+                dmask = axvisor_api::vmm::active_vcpus(axvisor_api::vmm::current_vm_id()) as u64;
                 dmask &= !(1 << self.vapic_id);
             }
         }
@@ -418,7 +415,7 @@ impl<H: AxMmHal, VM: AxVMHal> VirtualApicRegs<H, VM> {
             debug!("[VLAPIC] vlapic [{}] is software-disabled", self.vapic_id);
             // The apic is now disabled so stop the apic timer
             // and mask all the LVT entries.
-            self.virtual_timer.delete_timer()?;
+            self.virtual_timer.stop_timer()?;
             self.mask_lvts()?;
             warn!("VM wire mode should be changed to INTR here, unimplemented");
         } else if !old.is_set(SPURIOUS_INTERRUPT_VECTOR::APICSoftwareEnableDisable)
@@ -430,7 +427,7 @@ impl<H: AxMmHal, VM: AxVMHal> VirtualApicRegs<H, VM> {
             // if it is configured in periodic mode.
             if self.virtual_timer.is_periodic() {
                 debug!("Restarting the apic timer");
-                self.virtual_timer.start_timer()?;
+                self.virtual_timer.restart_timer()?;
             }
         }
 
@@ -490,7 +487,7 @@ impl<H: AxMmHal, VM: AxVMHal> VirtualApicRegs<H, VM> {
             let dmask = self.calculate_dest(shorthand, is_broadcast, dest, is_phys, false)?;
 
             // TODO: we need to get the specific vcpu number somehow.
-            for i in 0..VM::vcpu_num() as u32 {
+            for i in 0..axvisor_api::vmm::vcpu_num(axvisor_api::vmm::current_vm_id()) as u32 {
                 if dmask & (1 << i) != 0 {
                     match mode {
                         APICDeliveryMode::Fixed => {
@@ -552,14 +549,10 @@ impl<H: AxMmHal, VM: AxVMHal> VirtualApicRegs<H, VM> {
             ApicRegOffset::LvtTimer => {
                 mask |= LVT_TIMER::TimerMode::SET.mask();
                 val &= mask;
-                self.regs().LVT_TIMER.set(val);
+                self.regs().LVT_TIMER.set(val); // Duplicated, which one should be removed?
                 self.lvt_last.lvt_timer.set(val);
 
-                let new_timer_mode = self.timer_mode()?;
-                // A write to the LVT Timer Register that changes the timer mode disarms the local APIC timer.
-                if new_timer_mode != self.virtual_timer.timer_mode() {
-                    self.virtual_timer.update_timer_mode(new_timer_mode)?;
-                }
+                self.virtual_timer.write_lvt(val)?;
             }
             ApicRegOffset::LvtErr => {
                 val &= mask;
@@ -659,9 +652,14 @@ impl<H: AxMmHal, VM: AxVMHal> VirtualApicRegs<H, VM> {
         Ok(())
     }
 
-    fn write_icrtmr(&mut self) {}
+    fn write_icrtmr(&mut self) -> AxResult {
+        self.virtual_timer.write_icr(self.regs().ICR_TIMER.get())
+    }
 
-    fn write_dcr(&mut self) {}
+    fn write_dcr(&mut self) -> AxResult {
+        self.virtual_timer.write_dcr(self.regs().DCR_TIMER.get());
+        Ok(())
+    }
 }
 
 fn extract_index_u32(vector: u32) -> usize {
@@ -679,13 +677,13 @@ fn prio(x: u32) -> u32 {
     (x >> 4) & 0xf
 }
 
-impl<H: AxMmHal, VM: AxVMHal> Drop for VirtualApicRegs<H, VM> {
+impl<H: AxMmHal> Drop for VirtualApicRegs<H> {
     fn drop(&mut self) {
         H::dealloc_frame(self.apic_page.start_paddr());
     }
 }
 
-impl<H: AxMmHal, VM: AxVMHal> VirtualApicRegs<H, VM> {
+impl<H: AxMmHal> VirtualApicRegs<H> {
     pub fn handle_read(
         &self,
         offset: ApicRegOffset,
@@ -792,7 +790,7 @@ impl<H: AxMmHal, VM: AxVMHal> VirtualApicRegs<H, VM> {
                 debug!("[VLAPIC] read TimerInitCount register: {:#010X}", value);
             }
             ApicRegOffset::TimerCurCount => {
-                value = self.virtual_timer.current_counter() as _;
+                value = self.virtual_timer.read_ccr() as _;
             }
             ApicRegOffset::TimerDivConf => {
                 value = self.regs().DCR_TIMER.get() as _;
@@ -896,11 +894,11 @@ impl<H: AxMmHal, VM: AxVMHal> VirtualApicRegs<H, VM> {
                     return Ok(());
                 }
                 self.regs().ICR_TIMER.set(data32);
-                self.write_icrtmr();
+                self.write_icrtmr()?;
             }
             ApicRegOffset::TimerDivConf => {
                 self.regs().DCR_TIMER.set(data32);
-                self.write_dcr();
+                self.write_dcr()?;
             }
             ApicRegOffset::SelfIPI => {
                 if self.is_x2apic_enabled() {

@@ -7,7 +7,6 @@ extern crate alloc;
 extern crate log;
 
 mod consts;
-mod hal;
 mod regs;
 mod timer;
 mod utils;
@@ -15,7 +14,6 @@ mod vlapic;
 
 use alloc::boxed::Box;
 use core::cell::UnsafeCell;
-use hal::AxVMHal;
 
 use axerrno::AxResult;
 use memory_addr::{AddrRange, PAGE_SIZE_4K};
@@ -34,35 +32,35 @@ struct APICAccessPage([u8; PAGE_SIZE_4K]);
 static VIRTUAL_APIC_ACCESS_PAGE: APICAccessPage = APICAccessPage([0; PAGE_SIZE_4K]);
 
 /// A emulated local APIC device.
-pub struct EmulatedLocalApic<H: AxMmHal, VM: AxVMHal> {
-    vlapic_regs: UnsafeCell<VirtualApicRegs<H, VM>>,
+pub struct EmulatedLocalApic<H: AxMmHal> {
+    vlapic_regs: UnsafeCell<VirtualApicRegs<H>>,
 }
 
-impl<H: AxMmHal, VM: AxVMHal> EmulatedLocalApic<H, VM> {
+impl<H: AxMmHal> EmulatedLocalApic<H> {
     /// Create a new `EmulatedLocalApic`.
-    pub fn new(vcpu_id: u32) -> Self {
+    pub fn new(vm_id: u32, vcpu_id: u32) -> Self {
         EmulatedLocalApic {
-            vlapic_regs: UnsafeCell::new(VirtualApicRegs::new(vcpu_id)),
+            vlapic_regs: UnsafeCell::new(VirtualApicRegs::new(vm_id, vcpu_id)),
         }
     }
 
-    fn get_vlapic_regs(&self) -> &VirtualApicRegs<H, VM> {
+    fn get_vlapic_regs(&self) -> &VirtualApicRegs<H> {
         unsafe { &*self.vlapic_regs.get() }
     }
 
-    fn get_mut_vlapic_regs(&self) -> &mut VirtualApicRegs<H, VM> {
+    fn get_mut_vlapic_regs(&self) -> &mut VirtualApicRegs<H> {
         unsafe { &mut *self.vlapic_regs.get() }
     }
 }
 
-impl<H: AxMmHal, VM: AxVMHal> EmulatedLocalApic<H, VM> {
+impl<H: AxMmHal> EmulatedLocalApic<H> {
     /// APIC-access address (64 bits).
     /// This field contains the physical address of the 4-KByte APIC-access page.
     /// If the “virtualize APIC accesses” VM-execution control is 1,
     /// access to this page may cause VM exits or be virtualized by the processor.
     /// See Section 30.4.
     pub fn virtual_apic_access_addr() -> HostPhysAddr {
-        H::virt_to_phys(HostVirtAddr::from_usize(
+        axvisor_api::memory::virt_to_phys(HostVirtAddr::from_usize(
             VIRTUAL_APIC_ACCESS_PAGE.0.as_ptr() as usize,
         ))
     }
@@ -76,7 +74,7 @@ impl<H: AxMmHal, VM: AxVMHal> EmulatedLocalApic<H, VM> {
     }
 }
 
-impl<H: AxMmHal, VM: AxVMHal> BaseDeviceOps<AddrRange<GuestPhysAddr>> for EmulatedLocalApic<H, VM> {
+impl<H: AxMmHal> BaseDeviceOps<AddrRange<GuestPhysAddr>> for EmulatedLocalApic<H> {
     fn emu_type(&self) -> EmuDeviceType {
         EmuDeviceType::EmuDeviceTInterruptController
     }
@@ -119,12 +117,12 @@ impl<H: AxMmHal, VM: AxVMHal> BaseDeviceOps<AddrRange<GuestPhysAddr>> for Emulat
             .handle_write(reg_off, val, width, context)
     }
 
-    fn set_interrupt_injector(&mut self, _injector: Box<InterruptInjector>) {
+    fn set_interrupt_injector(&self, _injector: Box<InterruptInjector>) {
         todo!()
     }
 }
 
-impl<H: AxMmHal, VM: AxVMHal> BaseDeviceOps<SysRegAddrRange> for EmulatedLocalApic<H, VM> {
+impl<H: AxMmHal> BaseDeviceOps<SysRegAddrRange> for EmulatedLocalApic<H> {
     fn emu_type(&self) -> EmuDeviceType {
         EmuDeviceType::EmuDeviceTInterruptController
     }
@@ -167,7 +165,7 @@ impl<H: AxMmHal, VM: AxVMHal> BaseDeviceOps<SysRegAddrRange> for EmulatedLocalAp
             .handle_write(reg_off, val, width, context)
     }
 
-    fn set_interrupt_injector(&mut self, _injector: Box<InterruptInjector>) {
+    fn set_interrupt_injector(&self, _injector: Box<InterruptInjector>) {
         todo!()
     }
 }
