@@ -32,11 +32,11 @@ struct APICAccessPage([u8; PAGE_SIZE_4K]);
 static VIRTUAL_APIC_ACCESS_PAGE: APICAccessPage = APICAccessPage([0; PAGE_SIZE_4K]);
 
 /// A emulated local APIC device.
-pub struct EmulatedLocalApic<H: AxMmHal> {
-    vlapic_regs: UnsafeCell<VirtualApicRegs<H>>,
+pub struct EmulatedLocalApic {
+    vlapic_regs: UnsafeCell<VirtualApicRegs>,
 }
 
-impl<H: AxMmHal> EmulatedLocalApic<H> {
+impl EmulatedLocalApic {
     /// Create a new `EmulatedLocalApic`.
     pub fn new(vm_id: u32, vcpu_id: u32) -> Self {
         EmulatedLocalApic {
@@ -44,16 +44,16 @@ impl<H: AxMmHal> EmulatedLocalApic<H> {
         }
     }
 
-    fn get_vlapic_regs(&self) -> &VirtualApicRegs<H> {
+    fn get_vlapic_regs(&self) -> &VirtualApicRegs {
         unsafe { &*self.vlapic_regs.get() }
     }
 
-    fn get_mut_vlapic_regs(&self) -> &mut VirtualApicRegs<H> {
+    fn get_mut_vlapic_regs(&self) -> &mut VirtualApicRegs {
         unsafe { &mut *self.vlapic_regs.get() }
     }
 }
 
-impl<H: AxMmHal> EmulatedLocalApic<H> {
+impl EmulatedLocalApic {
     /// APIC-access address (64 bits).
     /// This field contains the physical address of the 4-KByte APIC-access page.
     /// If the “virtualize APIC accesses” VM-execution control is 1,
@@ -74,7 +74,7 @@ impl<H: AxMmHal> EmulatedLocalApic<H> {
     }
 }
 
-impl<H: AxMmHal> BaseDeviceOps<AddrRange<GuestPhysAddr>> for EmulatedLocalApic<H> {
+impl BaseDeviceOps<AddrRange<GuestPhysAddr>> for EmulatedLocalApic {
     fn emu_type(&self) -> EmuDeviceType {
         EmuDeviceType::EmuDeviceTInterruptController
     }
@@ -122,7 +122,7 @@ impl<H: AxMmHal> BaseDeviceOps<AddrRange<GuestPhysAddr>> for EmulatedLocalApic<H
     }
 }
 
-impl<H: AxMmHal> BaseDeviceOps<SysRegAddrRange> for EmulatedLocalApic<H> {
+impl BaseDeviceOps<SysRegAddrRange> for EmulatedLocalApic {
     fn emu_type(&self) -> EmuDeviceType {
         EmuDeviceType::EmuDeviceTInterruptController
     }

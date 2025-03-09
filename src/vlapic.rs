@@ -30,7 +30,7 @@ use crate::timer::{ApicTimer, TimerMode};
 use crate::utils::fls32;
 
 /// Virtual-APIC Registers.
-pub struct VirtualApicRegs<H: AxMmHal> {
+pub struct VirtualApicRegs {
     /// The virtual-APIC page is a 4-KByte region of memory
     /// that the processor uses to virtualize certain accesses to APIC registers and to manage virtual interrupts.
     /// The physical address of the virtual-APIC page is the virtual-APIC address,
@@ -55,10 +55,10 @@ pub struct VirtualApicRegs<H: AxMmHal> {
     /// Copies of some registers in the virtual APIC page,
     /// to maintain a coherent snapshot of the register (e.g. lvt_last)
     lvt_last: LocalVectorTable,
-    apic_page: PhysFrame<H>,
+    apic_page: PhysFrame,
 }
 
-impl<H: AxMmHal> VirtualApicRegs<H> {
+impl VirtualApicRegs {
     /// Create new virtual-APIC registers by allocating a 4-KByte page for the virtual-APIC page.
     pub fn new(vm_id: u32, vcpu_id: u32) -> Self {
         let apic_frame = PhysFrame::alloc_zero().expect("allocate virtual-APIC page failed");
@@ -677,13 +677,7 @@ fn prio(x: u32) -> u32 {
     (x >> 4) & 0xf
 }
 
-impl<H: AxMmHal> Drop for VirtualApicRegs<H> {
-    fn drop(&mut self) {
-        H::dealloc_frame(self.apic_page.start_paddr());
-    }
-}
-
-impl<H: AxMmHal> VirtualApicRegs<H> {
+impl VirtualApicRegs {
     pub fn handle_read(
         &self,
         offset: ApicRegOffset,
