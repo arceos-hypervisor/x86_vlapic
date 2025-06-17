@@ -1,6 +1,9 @@
 use alloc::boxed::Box;
 use axerrno::{AxResult, ax_err};
-use axvisor_api::{time::{current_ticks, register_timer, ticks_to_nanos, ticks_to_time}, vmm::{inject_interrupt, VCpuId, VMId}};
+use axvisor_api::{
+    time::{current_ticks, register_timer, ticks_to_nanos, ticks_to_time},
+    vmm::{VCpuId, VMId, inject_interrupt},
+};
 
 /// Local APIC timer modes.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -223,9 +226,7 @@ impl ApicTimer {
                 // TODO: read the LVT Timer Register here
                 trace!(
                     "vlapic @ (vm {}, vcpu {}) timer expired, inject interrupt {}",
-                    vm_id,
-                    vcpu_id,
-                    vector
+                    vm_id, vcpu_id, vector
                 );
                 inject_interrupt(vm_id, vcpu_id, vector);
             }),

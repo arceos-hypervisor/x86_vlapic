@@ -4,7 +4,7 @@ use axerrno::{AxError, AxResult};
 use bit::BitIndex;
 use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
-use axaddrspace::{device::AccessWidth, HostPhysAddr};
+use axaddrspace::{HostPhysAddr, device::AccessWidth};
 use axvisor_api::memory::PhysFrame;
 
 use crate::consts::{
@@ -285,7 +285,8 @@ impl VirtualApicRegs {
             // Logical mode: "dest" is message destination addr
             // to be compared with the logical APIC ID in LDR.
 
-            let vcpu_mask = axvisor_api::vmm::active_vcpus(axvisor_api::vmm::current_vm_id()).unwrap();
+            let vcpu_mask =
+                axvisor_api::vmm::active_vcpus(axvisor_api::vmm::current_vm_id()).unwrap();
             for i in 0..axvisor_api::vmm::current_vm_vcpu_num() {
                 if vcpu_mask & (1 << i) != 0 {
                     if !self.is_dest_field_matched(dest)? {
@@ -676,11 +677,7 @@ fn prio(x: u32) -> u32 {
 }
 
 impl VirtualApicRegs {
-    pub fn handle_read(
-        &self,
-        offset: ApicRegOffset,
-        width: AccessWidth,
-    ) -> AxResult<usize> {
+    pub fn handle_read(&self, offset: ApicRegOffset, width: AccessWidth) -> AxResult<usize> {
         let mut value: usize = 0;
         match offset {
             ApicRegOffset::ID => {

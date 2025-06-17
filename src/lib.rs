@@ -17,7 +17,10 @@ use core::cell::UnsafeCell;
 use axerrno::AxResult;
 use memory_addr::{AddrRange, PAGE_SIZE_4K};
 
-use axaddrspace::{device::{AccessWidth, SysRegAddr, SysRegAddrRange}, GuestPhysAddr, HostPhysAddr, HostVirtAddr};
+use axaddrspace::{
+    GuestPhysAddr, HostPhysAddr, HostVirtAddr,
+    device::{AccessWidth, SysRegAddr, SysRegAddrRange},
+};
 use axdevice_base::{BaseDeviceOps, EmuDeviceType};
 
 use crate::consts::x2apic::x2apic_msr_access_reg;
@@ -85,11 +88,7 @@ impl BaseDeviceOps<AddrRange<GuestPhysAddr>> for EmulatedLocalApic {
         )
     }
 
-    fn handle_read(
-        &self,
-        addr: GuestPhysAddr,
-        width: AccessWidth,
-    ) -> AxResult<usize> {
+    fn handle_read(&self, addr: GuestPhysAddr, width: AccessWidth) -> AxResult<usize> {
         debug!(
             "EmulatedLocalApic::handle_read: addr={:?}, width={:?}",
             addr, width,
@@ -98,19 +97,13 @@ impl BaseDeviceOps<AddrRange<GuestPhysAddr>> for EmulatedLocalApic {
         self.get_vlapic_regs().handle_read(reg_off, width)
     }
 
-    fn handle_write(
-        &self,
-        addr: GuestPhysAddr,
-        width: AccessWidth,
-        val: usize,
-    ) -> AxResult {
+    fn handle_write(&self, addr: GuestPhysAddr, width: AccessWidth, val: usize) -> AxResult {
         debug!(
             "EmulatedLocalApic::handle_write: addr={:?}, width={:?}, val={:#x}",
             addr, width, val,
         );
         let reg_off = xapic_mmio_access_reg_offset(addr);
-        self.get_mut_vlapic_regs()
-            .handle_write(reg_off, val, width)
+        self.get_mut_vlapic_regs().handle_write(reg_off, val, width)
     }
 }
 
@@ -127,11 +120,7 @@ impl BaseDeviceOps<SysRegAddrRange> for EmulatedLocalApic {
         )
     }
 
-    fn handle_read(
-        &self,
-        addr: SysRegAddr,
-        width: AccessWidth,
-    ) -> AxResult<usize> {
+    fn handle_read(&self, addr: SysRegAddr, width: AccessWidth) -> AxResult<usize> {
         debug!(
             "EmulatedLocalApic::handle_read: addr={:?}, width={:?}",
             addr, width,
@@ -140,18 +129,12 @@ impl BaseDeviceOps<SysRegAddrRange> for EmulatedLocalApic {
         self.get_vlapic_regs().handle_read(reg_off, width)
     }
 
-    fn handle_write(
-        &self,
-        addr: SysRegAddr,
-        width: AccessWidth,
-        val: usize,
-    ) -> AxResult {
+    fn handle_write(&self, addr: SysRegAddr, width: AccessWidth, val: usize) -> AxResult {
         debug!(
             "EmulatedLocalApic::handle_write: addr={:?}, width={:?}, val={:#x}",
             addr, width, val
         );
         let reg_off = x2apic_msr_access_reg(addr);
-        self.get_mut_vlapic_regs()
-            .handle_write(reg_off, val, width)
+        self.get_mut_vlapic_regs().handle_write(reg_off, val, width)
     }
 }
