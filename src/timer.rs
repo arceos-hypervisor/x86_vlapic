@@ -1,22 +1,17 @@
 use alloc::boxed::Box;
 use axerrno::{AxResult, ax_err};
 use axvisor_api::{
-    time::{current_ticks, register_timer, ticks_to_nanos, ticks_to_time},
+    time::{self, current_ticks, register_timer, ticks_to_nanos, ticks_to_time},
     vmm::{VCpuId, VMId, inject_interrupt},
 };
 
-/// Local APIC timer modes.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-#[repr(u8)]
-#[allow(dead_code)]
-pub enum TimerMode {
-    /// Timer only fires once.
-    OneShot = 0b00,
-    /// Timer fires periodically.
-    Periodic = 0b01,
-    /// Timer fires at an absolute time.
-    TscDeadline = 0b10,
-}
+use crate::{
+    consts::RESET_LVT_REG,
+    regs::lvt::{
+        LVT_TIMER::{self, TimerMode::Value as TimerMode},
+        LvtTimerRegisterLocal,
+    },
+};
 
 /// A virtual local APIC timer. (SDM Vol. 3C, Section 11.5.4)
 ///
@@ -43,8 +38,12 @@ pub enum TimerMode {
 ///   - a 0 is written to the Initial Count Register.
 pub struct ApicTimer {
     // the raw value of writable registers
-    lvt_timer_register: u32,
+    /// Local Vector Table Timer Register. These's another copy in [`VirtualApicRegs`](crate::VirtualApicRegs), but we
+    /// keep a separate copy here for easier access.
+    lvt_timer_register: LvtTimerRegisterLocal,
+    /// Initial Count Register. This is the value that determines when the timer will fire.
     initial_count_register: u32,
+    /// Divide Configuration Register. This determines the frequency of the timer.
     divide_configuration_register: u32,
 
     // internal states
@@ -60,12 +59,11 @@ pub struct ApicTimer {
 impl ApicTimer {
     pub(crate) const fn new(vm_id: VMId, vcpu_id: VCpuId) -> Self {
         Self {
-            // value after reset as per SDM Vol. 3A, Section 11.5.4
-            lvt_timer_register: 0x1_0000, // masked, one-shot, vector 0
-            initial_count_register: 0,    // 0 (stopped)
-            divide_configuration_register: 0, // divide by 2
+            lvt_timer_register: LvtTimerRegisterLocal::new(RESET_LVT_REG), // masked, one-shot, vector 0
+            initial_count_register: 0,                                     // 0 (stopped)
+            divide_configuration_register: 0,                              // divide by 2
 
-            divide_shift: 1, // as `divide_configuration_register` is 0, divide by 2
+            divide_shift: 1, // as `divide_configuration_register` is 0, the shift is 1 (divide by 2)
             last_start_ticks: 0,
             deadline_ns: 0,
             cancel_token: None,
@@ -90,7 +88,7 @@ impl ApicTimer {
     // }
 
     pub fn read_lvt(&self) -> u32 {
-        self.lvt_timer_register
+        self.lvt_timer_register.get()
     }
 
     pub fn write_lvt(&mut self, mut value: u32) -> AxResult {
@@ -98,7 +96,7 @@ impl ApicTimer {
         const LVT_MASK: u32 = 0x0007_10FF;
 
         value &= LVT_MASK;
-        self.lvt_timer_register = value;
+        self.lvt_timer_register.set(value);
         Ok(())
     }
 
@@ -151,37 +149,26 @@ impl ApicTimer {
         if !self.is_started() {
             return 0;
         }
-        let remaining_ns = self
-            .deadline_ns
-            .wrapping_sub(axvisor_api::time::current_time_nanos());
-        let remaining_ticks = axvisor_api::time::nanos_to_ticks(remaining_ns);
+        let remaining_ns = self.deadline_ns.wrapping_sub(time::current_time_nanos());
+        let remaining_ticks = time::nanos_to_ticks(remaining_ns);
         return (remaining_ticks >> self.divide_shift) as _;
     }
 
     /// Get the timer mode.
     pub fn timer_mode(&self) -> TimerMode {
-        // match (self.lvt_timer_register >> 17) & 0b11 {
-        //     0b00 => TimerMode::OneShot,
-        //     0b01 => TimerMode::Periodic,
-        //     0b10 => TimerMode::TscDeadline,
-        //     _ => panic!("Invalid timer mode"),
-        // }
-        //
-        // For simplicity, we will ignore the TscDeadline mode. Just pretend we don't support it.
-        match ((self.lvt_timer_register >> 17) & 0b1) == 0b1 {
-            false => TimerMode::OneShot,
-            true => TimerMode::Periodic,
-        }
+        self.lvt_timer_register
+            .read_as_enum(LVT_TIMER::TimerMode)
+            .unwrap() // just panic if the value is invalid
     }
 
     /// Check whether the timer interrupt is masked.
     pub fn is_masked(&self) -> bool {
-        self.lvt_timer_register & (1 << 16) != 0
+        self.lvt_timer_register.is_set(LVT_TIMER::Mask)
     }
 
     /// The timer interrupt vector number.
-    pub const fn vector(&self) -> u8 {
-        (self.lvt_timer_register & 0xff) as u8
+    pub fn vector(&self) -> u8 {
+        self.lvt_timer_register.read(LVT_TIMER::Vector) as u8
     }
 
     /// Check whether the timer is started.
@@ -241,7 +228,7 @@ impl ApicTimer {
             self.last_start_ticks = 0;
             self.deadline_ns = 0;
 
-            axvisor_api::time::cancel_timer(self.cancel_token.take().unwrap());
+            time::cancel_timer(self.cancel_token.take().unwrap());
         } else {
             warn!("`stop_timer` called when timer is not started, bad operation tolerated");
         }
@@ -250,9 +237,8 @@ impl ApicTimer {
     }
 
     /// Whether the timer mode is periodic.
-    pub const fn is_periodic(&self) -> bool {
-        let timer_mode = (self.lvt_timer_register >> 17) & 0b11;
-        timer_mode == TimerMode::Periodic as _
+    pub fn is_periodic(&self) -> bool {
+        self.timer_mode() == TimerMode::Periodic
     }
 
     // /// Set LVT Timer Register.

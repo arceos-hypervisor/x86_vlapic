@@ -1,31 +1,34 @@
 use core::ptr::NonNull;
 
-use axerrno::{AxError, AxResult};
 use bit::BitIndex;
 use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
 use axaddrspace::{HostPhysAddr, device::AccessWidth};
+use axerrno::{AxError, AxResult, ax_err_type};
 use axvisor_api::memory::PhysFrame;
 
 use crate::consts::{
     APIC_LVT_DS, APIC_LVT_M, APIC_LVT_VECTOR, ApicRegOffset, LAPIC_TRIG_EDGE,
     RESET_SPURIOUS_INTERRUPT_VECTOR,
 };
-use crate::regs::DESTINATION_FORMAT::Model::Value as APICDestinationFormat;
-use crate::regs::INTERRUPT_COMMAND_LOW::DeliveryMode::Value as APICDeliveryMode;
-use crate::regs::INTERRUPT_COMMAND_LOW::DestinationShorthand::Value as APICDestination;
-use crate::regs::lvt::{
-    LVT_CMCI, LVT_ERROR, LVT_LINT0, LVT_LINT1, LVT_PERFORMANCE_COUNTER, LVT_THERMAL_MONITOR,
-    LVT_TIMER, LocalVectorTable,
-};
-use crate::regs::{APIC_BASE, ApicBaseRegisterMsr, DESTINATION_FORMAT, LocalAPICRegs};
-use crate::regs::{ERROR_STATUS, ErrorStatusRegisterLocal, ErrorStatusRegisterValue};
 use crate::regs::{
-    INTERRUPT_COMMAND_HIGH, INTERRUPT_COMMAND_LOW, InterruptCommandRegisterLowLocal,
+    APIC_BASE, ApicBaseRegisterMsr,
+    DESTINATION_FORMAT::{self, Model::Value as APICDestinationFormat},
+    ERROR_STATUS, ErrorStatusRegisterLocal, ErrorStatusRegisterValue, INTERRUPT_COMMAND_HIGH,
+    INTERRUPT_COMMAND_LOW::{
+        self, DeliveryMode::Value as APICDeliveryMode,
+        DestinationShorthand::Value as APICDestination,
+    },
+    InterruptCommandRegisterLowLocal, LocalAPICRegs, SPURIOUS_INTERRUPT_VECTOR,
+    SpuriousInterruptVectorRegisterLocal,
+    lvt::{
+        LVT_CMCI, LVT_ERROR, LVT_LINT0, LVT_LINT1, LVT_PERFORMANCE_COUNTER, LVT_THERMAL_MONITOR,
+        LVT_TIMER, LocalVectorTable,
+    },
 };
-use crate::regs::{SPURIOUS_INTERRUPT_VECTOR, SpuriousInterruptVectorRegisterLocal};
-use crate::timer::{ApicTimer, TimerMode};
-use crate::utils::fls32;
+use crate::{timer::ApicTimer, utils::fls32};
+
+pub use crate::regs::lvt::LVT_TIMER::TimerMode::Value as TimerMode;
 
 /// Virtual-APIC Registers.
 pub struct VirtualApicRegs {
@@ -106,12 +109,10 @@ impl VirtualApicRegs {
 
     /// Returns the current timer mode.
     pub fn timer_mode(&self) -> AxResult<TimerMode> {
-        match self.regs().LVT_TIMER.read_as_enum(LVT_TIMER::TimerMode) {
-            Some(LVT_TIMER::TimerMode::Value::OneShot) => Ok(TimerMode::OneShot),
-            Some(LVT_TIMER::TimerMode::Value::Periodic) => Ok(TimerMode::Periodic),
-            Some(LVT_TIMER::TimerMode::Value::TSCDeadline) => Ok(TimerMode::TscDeadline),
-            Some(LVT_TIMER::TimerMode::Value::Reserved) | None => Err(AxError::InvalidData),
-        }
+        self.regs()
+            .LVT_TIMER
+            .read_as_enum(LVT_TIMER::TimerMode)
+            .ok_or_else(|| ax_err_type!(InvalidData, "Failed to read timer mode from LVT_TIMER"))
     }
 
     /// 30.1.4 EOI Virtualization
@@ -767,11 +768,11 @@ impl VirtualApicRegs {
                     Ok(TimerMode::OneShot) | Ok(TimerMode::Periodic) => {
                         value = self.regs().ICR_TIMER.get() as _;
                     }
-                    Ok(TimerMode::TscDeadline) => {
+                    Ok(TimerMode::TSCDeadline) => {
                         /* if TSCDEADLINE mode always return 0*/
                         value = 0;
                     }
-                    Err(_) => {
+                    _ => {
                         warn!("[VLAPIC] read TimerInitCount register: invalid timer mode");
                     }
                 }
@@ -874,7 +875,7 @@ impl VirtualApicRegs {
             // Timer registers.
             ApicRegOffset::TimerInitCount => {
                 // if TSCDEADLINE mode ignore icr_timer
-                if self.timer_mode()? == TimerMode::TscDeadline {
+                if self.timer_mode()? == TimerMode::TSCDeadline {
                     warn!(
                         "[VLAPIC] write TimerInitCount register: ignore icr_timer in TSCDEADLINE mode"
                     );
