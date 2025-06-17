@@ -14,6 +14,6 @@ memory_addr = "0.3"
 axerrno = "0.1.0"
 
 axaddrspace = { git = "https://github.com/arceos-hypervisor/axaddrspace.git" }
-axdevice_base = { git = "https://github.com/arceos-hypervisor/axdevice_crates.git", branch = "inject_interrupt" }
+axdevice_base = { git = "https://github.com/arceos-hypervisor/axdevice_crates.git" }
 
-axvisor_api = { git = "https://github.com/arceos-hypervisor/axvisor_api.git", branch = "inject_interrupt" }
+axvisor_api = { git = "https://github.com/arceos-hypervisor/axvisor_api.git" }
