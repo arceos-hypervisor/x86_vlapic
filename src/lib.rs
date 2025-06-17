@@ -49,6 +49,7 @@ impl EmulatedLocalApic {
         unsafe { &*self.vlapic_regs.get() }
     }
 
+    #[allow(clippy::mut_from_ref)] // SAFETY: get_mut_vlapic_regs is never called concurrently.
     fn get_mut_vlapic_regs(&self) -> &mut VirtualApicRegs {
         unsafe { &mut *self.vlapic_regs.get() }
     }
