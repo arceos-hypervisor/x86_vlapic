@@ -5,7 +5,7 @@ use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
 use axaddrspace::{HostPhysAddr, device::AccessWidth};
 use axerrno::{AxError, AxResult, ax_err_type};
-use axvisor_api::memory::PhysFrame;
+use axvisor_api::{memory::PhysFrame, vmm};
 
 use crate::consts::{
     APIC_LVT_DS, APIC_LVT_M, APIC_LVT_VECTOR, ApicRegOffset, LAPIC_TRIG_EDGE,
@@ -273,7 +273,7 @@ impl VirtualApicRegs {
 
         if is_broadcast {
             // Broadcast in both logical and physical modes.
-            dmask = axvisor_api::vmm::current_vm_active_vcpus() as u64;
+            dmask = vmm::current_vm_active_vcpus() as u64;
         } else if is_phys {
             // Physical mode: "dest" is local APIC ID.
             // Todo: distinguish between APIC ID and vCPU ID.
@@ -286,9 +286,8 @@ impl VirtualApicRegs {
             // Logical mode: "dest" is message destination addr
             // to be compared with the logical APIC ID in LDR.
 
-            let vcpu_mask =
-                axvisor_api::vmm::active_vcpus(axvisor_api::vmm::current_vm_id()).unwrap();
-            for i in 0..axvisor_api::vmm::current_vm_vcpu_num() {
+            let vcpu_mask = vmm::active_vcpus(vmm::current_vm_id()).unwrap();
+            for i in 0..vmm::current_vm_vcpu_num() {
                 if vcpu_mask & (1 << i) != 0 {
                     if !self.is_dest_field_matched(dest)? {
                         continue;
@@ -318,10 +317,10 @@ impl VirtualApicRegs {
                 dmask.set_bit(self.vapic_id as usize, true);
             }
             APICDestination::AllIncludingSelf => {
-                dmask = axvisor_api::vmm::current_vm_active_vcpus() as u64;
+                dmask = vmm::current_vm_active_vcpus() as u64;
             }
             APICDestination::AllExcludingSelf => {
-                dmask = axvisor_api::vmm::current_vm_active_vcpus() as u64;
+                dmask = vmm::current_vm_active_vcpus() as u64;
                 dmask &= !(1 << self.vapic_id);
             }
         }
@@ -487,7 +486,7 @@ impl VirtualApicRegs {
             let dmask = self.calculate_dest(shorthand, is_broadcast, dest, is_phys, false)?;
 
             // TODO: we need to get the specific vcpu number somehow.
-            for i in 0..axvisor_api::vmm::current_vm_vcpu_num() as u32 {
+            for i in 0..vmm::current_vm_vcpu_num() as u32 {
                 if dmask & (1 << i) != 0 {
                     match mode {
                         APICDeliveryMode::Fixed => {

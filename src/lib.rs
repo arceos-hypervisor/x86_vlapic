@@ -15,6 +15,7 @@ mod vlapic;
 use core::cell::UnsafeCell;
 
 use axerrno::AxResult;
+use axvisor_api::memory;
 use memory_addr::{AddrRange, PAGE_SIZE_4K};
 
 use axaddrspace::{
@@ -62,7 +63,7 @@ impl EmulatedLocalApic {
     /// access to this page may cause VM exits or be virtualized by the processor.
     /// See Section 30.4.
     pub fn virtual_apic_access_addr() -> HostPhysAddr {
-        axvisor_api::memory::virt_to_phys(HostVirtAddr::from_usize(
+        memory::virt_to_phys(HostVirtAddr::from_usize(
             VIRTUAL_APIC_ACCESS_PAGE.0.as_ptr() as usize,
         ))
     }
