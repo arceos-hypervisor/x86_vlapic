@@ -15,7 +15,7 @@ mod vlapic;
 use core::cell::UnsafeCell;
 
 use axerrno::AxResult;
-use axvisor_api::memory;
+use axvisor_api::{memory, vmm::{VCpuId, VMId}};
 use memory_addr::{AddrRange, PAGE_SIZE_4K};
 
 use axaddrspace::{
@@ -40,7 +40,7 @@ pub struct EmulatedLocalApic {
 
 impl EmulatedLocalApic {
     /// Create a new `EmulatedLocalApic`.
-    pub fn new(vm_id: u32, vcpu_id: u32) -> Self {
+    pub fn new(vm_id: VMId, vcpu_id: VCpuId) -> Self {
         EmulatedLocalApic {
             vlapic_regs: UnsafeCell::new(VirtualApicRegs::new(vm_id, vcpu_id)),
         }

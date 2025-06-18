@@ -1,5 +1,6 @@
 use core::ptr::NonNull;
 
+use axvisor_api::vmm::{VCpuId, VMId};
 use bit::BitIndex;
 use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
@@ -61,11 +62,11 @@ pub struct VirtualApicRegs {
 
 impl VirtualApicRegs {
     /// Create new virtual-APIC registers by allocating a 4-KByte page for the virtual-APIC page.
-    pub fn new(vm_id: u32, vcpu_id: u32) -> Self {
+    pub fn new(vm_id: VMId, vcpu_id: VCpuId) -> Self {
         let apic_frame = PhysFrame::alloc_zero().expect("allocate virtual-APIC page failed");
         Self {
             // virtual-APIC ID is the same as the VCPU ID.
-            vapic_id: vcpu_id,
+            vapic_id: vcpu_id as _,
             esr_pending: ErrorStatusRegisterLocal::new(0),
             esr_firing: 0,
             virtual_lapic: NonNull::new(apic_frame.as_mut_ptr().cast()).unwrap(),
@@ -74,7 +75,7 @@ impl VirtualApicRegs {
             lvt_last: LocalVectorTable::default(),
             isrv: 0,
             apic_base: ApicBaseRegisterMsr::new(0),
-            virtual_timer: ApicTimer::new(vm_id as _, vcpu_id as _),
+            virtual_timer: ApicTimer::new(vm_id, vcpu_id),
         }
     }
 
