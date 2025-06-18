@@ -15,7 +15,10 @@ mod vlapic;
 use core::cell::UnsafeCell;
 
 use axerrno::AxResult;
-use axvisor_api::{memory, vmm::{VCpuId, VMId}};
+use axvisor_api::{
+    memory,
+    vmm::{VCpuId, VMId},
+};
 use memory_addr::{AddrRange, PAGE_SIZE_4K};
 
 use axaddrspace::{
