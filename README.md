@@ -2,30 +2,19 @@
 
 [![CI](https://github.com/arceos-hypervisor/x86_vlapic/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/arceos-hypervisor/x86_vlapic/actions/workflows/ci.yml)
 
-A Rust library for virtualizing x86 Local Advanced Programmable Interrupt Controller (LAPIC) functionality.
+A Rust library for virtualizing x86 Local Advanced Programmable Interrupt Controller (LAPIC) functionality. **[Work in Progress]**.
 
 ## Overview
 
 This library provides a software implementation of the x86 Local APIC (Advanced Programmable Interrupt Controller) for hypervisor use cases. It virtualizes the LAPIC registers and functionality according to the Intel Software Developer's Manual (SDM) specifications.
 
-## Features
+⚠️ **Important**: This is an early-stage library focused solely on timer virtualization. Do not use for full LAPIC emulation yet.
 
-- **Complete LAPIC Register Support**: Implements all major LAPIC registers including:
-  - Local Vector Table (LVT) registers (Timer, Thermal, Performance Counter, LINT0/1, Error, CMCI)
-  - Interrupt Command Register (ICR)
-  - Error Status Register (ESR)
-  - Spurious Interrupt Vector Register (SVR)
-  - Task Priority Register (TPR)
-  - And more...
-
-- **Timer Virtualization**: Full support for LAPIC timer modes:
-  - One-shot mode
-  - Periodic mode
-  - TSC-Deadline mode
-
-- **Memory-Mapped I/O Simulation**: Provides MMIO-like interface for register access
-
-- **Local Register Copies**: Efficient local copies of register state for performance
+## Current Status
+- ✅ **Timer Virtualization**: Fully implemented with support for one-shot, periodic, and TSC-deadline modes
+- 🚧 **Register Definitions**: Complete register layout and bitfield definitions for all LAPIC registers  
+- 🚧 **Interrupt Handling**: Framework implemented, core interrupt delivery logic in development
+- 🚧 **IPI Support**: Partial implementation, some functions are placeholders
 
 ## Architecture
 
@@ -76,6 +65,11 @@ assert!(page_addr.is_aligned(PAGE_SIZE_4K));
 ## Target Platform
 
 This library is designed for x86_64 architecture and targets `x86_64-unknown-none` for no-std environments, making it suitable for hypervisor and kernel development.
+
+## Related Projects
+
+[ArceOS](https://github.com/arceos-org/arceos) - An experimental modular OS (or Unikernel)
+[AxVisor](https://github.com/arceos-hypervisor/axvisor) - Hypervisor implementation
 
 ---
 
