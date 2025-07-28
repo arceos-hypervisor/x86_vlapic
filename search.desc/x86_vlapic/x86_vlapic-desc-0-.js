@@ -1,0 +1,1 @@
+searchState.loadedDescShard("x86_vlapic", 0, "Emulated Local APIC.\nA emulated local APIC device.\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.\nCreate a new <code>EmulatedLocalApic</code>.\nAPIC-access address (64 bits). This field contains the …\nVirtual-APIC address (64 bits). This field contains the …")

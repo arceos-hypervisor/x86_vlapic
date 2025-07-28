@@ -1,0 +1,68 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Emulated Local APIC."><title>x86_vlapic - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-0ce1a80b.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="x86_vlapic" data-themes="" data-resource-suffix="" data-rustdoc-version="1.89.0-nightly (60dabef95 2025-05-19)" data-channel="nightly" data-search-js="search-f7877310.js" data-settings-js="settings-5514c975.js" ><script src="../static.files/storage-4e99c027.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-7ef8a74a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-32bb7600.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../x86_vlapic/index.html">x86_<wbr>vlapic</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#x86_vlapic" title="x86_vlapic">x86_vlapic</a><ul><li><a href="#overview" title="Overview">Overview</a></li><li><a href="#current-status" title="Current Status">Current Status</a></li><li><a href="#architecture" title="Architecture">Architecture</a></li><li><a href="#basic-example" title="Basic Example">Basic Example</a></li><li><a href="#target-platform" title="Target Platform">Target Platform</a></li><li><a href="#related-projects" title="Related Projects">Related Projects</a></li></ul></li></ul><h3><a href="#structs">Crate Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>x86_vlapic</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/x86_vlapic/lib.rs.html#1-146">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Emulated Local APIC.</p>
+<h2 id="x86_vlapic"><a class="doc-anchor" href="#x86_vlapic">§</a>x86_vlapic</h2>
+<p><a href="https://github.com/arceos-hypervisor/x86_vlapic/actions/workflows/ci.yml"><img src="https://github.com/arceos-hypervisor/x86_vlapic/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI" /></a></p>
+<p>A Rust library for virtualizing x86 Local Advanced Programmable Interrupt Controller (LAPIC) functionality. <strong>[Work in Progress]</strong>.</p>
+<h3 id="overview"><a class="doc-anchor" href="#overview">§</a>Overview</h3>
+<p>This library provides a software implementation of the x86 Local APIC (Advanced Programmable Interrupt Controller) for hypervisor use cases. It virtualizes the LAPIC registers and functionality according to the Intel Software Developer’s Manual (SDM) specifications.</p>
+<p>⚠️ <strong>Important</strong>: This is an early-stage library focused solely on timer virtualization. Do not use for full LAPIC emulation yet.</p>
+<h3 id="current-status"><a class="doc-anchor" href="#current-status">§</a>Current Status</h3>
+<ul>
+<li>✅ <strong>Timer Virtualization</strong>: Fully implemented with support for one-shot, periodic, and TSC-deadline modes</li>
+<li>🚧 <strong>Register Definitions</strong>: Complete register layout and bitfield definitions for all LAPIC registers</li>
+<li>🚧 <strong>Interrupt Handling</strong>: Framework implemented, core interrupt delivery logic in development</li>
+<li>🚧 <strong>IPI Support</strong>: Partial implementation, some functions are placeholders</li>
+</ul>
+<h3 id="architecture"><a class="doc-anchor" href="#architecture">§</a>Architecture</h3>
+<p>The library is structured into several key modules:</p>
+<h4 id="core-modules"><a class="doc-anchor" href="#core-modules">§</a>Core Modules</h4>
+<ul>
+<li><a href="src/vlapic.rs"><code>src/vlapic.rs</code></a> - Main virtual LAPIC implementation</li>
+<li><a href="src/timer.rs"><code>src/timer.rs</code></a> - LAPIC timer virtualization</li>
+<li><a href="src/consts.rs"><code>src/consts.rs</code></a> - Constants and register offset definitions</li>
+<li><a href="src/utils.rs"><code>src/utils.rs</code></a> - Utility functions</li>
+</ul>
+<h4 id="register-definitions"><a class="doc-anchor" href="#register-definitions">§</a>Register Definitions</h4>
+<ul>
+<li><a href="src/regs/mod.rs"><code>src/regs/mod.rs</code></a> - Main register structure definitions</li>
+<li><a href="src/regs/lvt/"><code>src/regs/lvt/</code></a> - Local Vector Table register implementations
+<ul>
+<li><a href="src/regs/lvt/timer.rs"><code>timer.rs</code></a> - LVT Timer Register</li>
+<li><a href="src/regs/lvt/lint0.rs"><code>lint0.rs</code></a> - LVT LINT0 Register</li>
+<li><a href="src/regs/lvt/lint1.rs"><code>lint1.rs</code></a> - LVT LINT1 Register</li>
+<li><a href="src/regs/lvt/error.rs"><code>error.rs</code></a> - LVT Error Register</li>
+<li><a href="src/regs/lvt/thermal.rs"><code>thermal.rs</code></a> - LVT Thermal Monitor Register</li>
+<li><a href="src/regs/lvt/perfmon.rs"><code>perfmon.rs</code></a> - LVT Performance Counter Register</li>
+<li><a href="src/regs/lvt/cmci.rs"><code>cmci.rs</code></a> - LVT CMCI Register</li>
+</ul>
+</li>
+<li><a href="src/regs/timer/"><code>src/regs/timer/</code></a> - Timer-related register definitions
+<ul>
+<li><a href="src/regs/timer/dcr.rs"><code>dcr.rs</code></a> - Divide Configuration Register</li>
+</ul>
+</li>
+<li>Other register modules for ICR, ESR, SVR, etc.</li>
+</ul>
+<h3 id="basic-example"><a class="doc-anchor" href="#basic-example">§</a>Basic Example</h3>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>x86_vlapic::EmulatedLocalApic;
+<span class="kw">use </span>axvisor_api::vmm::{VMId, VCpuId};
+
+<span class="comment">// Create a new emulated Local APIC for VM 1, VCPU 0
+</span><span class="kw">let </span>vm_id = VMId::from(<span class="number">1 </span><span class="kw">as </span>usize);
+<span class="kw">let </span>vcpu_id = VCpuId::from(<span class="number">0 </span><span class="kw">as </span>usize);
+<span class="kw">let </span>apic = EmulatedLocalApic::new(vm_id, vcpu_id);
+
+<span class="comment">// Get the shared virtual APIC access page address (static for all instances)
+</span><span class="kw">let </span>access_addr = EmulatedLocalApic::virtual_apic_access_addr();
+<span class="macro">assert!</span>(access_addr.is_aligned(PAGE_SIZE_4K));
+
+<span class="comment">// Get the per-VCPU virtual APIC page address
+</span><span class="kw">let </span>page_addr = apic.virtual_apic_page_addr();
+<span class="macro">assert!</span>(page_addr.is_aligned(PAGE_SIZE_4K));</code></pre></div>
+<h3 id="target-platform"><a class="doc-anchor" href="#target-platform">§</a>Target Platform</h3>
+<p>This library is designed for x86_64 architecture and targets <code>x86_64-unknown-none</code> for no-std environments, making it suitable for hypervisor and kernel development.</p>
+<h3 id="related-projects"><a class="doc-anchor" href="#related-projects">§</a>Related Projects</h3>
+<p><a href="https://github.com/arceos-org/arceos">ArceOS</a> - An experimental modular OS (or Unikernel)
+<a href="https://github.com/arceos-hypervisor/axvisor">AxVisor</a> - Hypervisor implementation</p>
+<hr />
+<p><strong>Note</strong>: This is a virtualization library and does not interact with actual hardware LAPIC. It’s designed for use in hypervisors and virtual machine monitors.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.EmulatedLocalApic.html" title="struct x86_vlapic::EmulatedLocalApic">Emulated<wbr>Local<wbr>Apic</a></dt><dd>A emulated local APIC device.</dd></dl></section></div></main></body></html>
