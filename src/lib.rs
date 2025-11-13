@@ -1,5 +1,6 @@
 //! Emulated Local APIC.
 #![no_std]
+#![cfg(target_arch = "x86_64")]
 #![doc = include_str!("../README.md")]
 
 extern crate alloc;
