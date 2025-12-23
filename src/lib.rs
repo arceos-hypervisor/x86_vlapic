@@ -17,10 +17,10 @@ mod vlapic;
 use core::cell::UnsafeCell;
 
 use axerrno::AxResult;
-use axvisor_api::{
-    memory,
-    vmm::{VCpuId, VMId},
-};
+// use axvisor_api::{
+//     memory,
+//     vmm::{VCpuId, VMId},
+// };
 use memory_addr::{AddrRange, PAGE_SIZE_4K};
 
 use axaddrspace::{
@@ -42,6 +42,9 @@ static VIRTUAL_APIC_ACCESS_PAGE: APICAccessPage = APICAccessPage([0; PAGE_SIZE_4
 pub struct EmulatedLocalApic {
     vlapic_regs: UnsafeCell<VirtualApicRegs>,
 }
+
+unsafe impl Send for EmulatedLocalApic {}
+unsafe impl Sync for EmulatedLocalApic {}
 
 impl EmulatedLocalApic {
     /// Create a new `EmulatedLocalApic`.

@@ -287,7 +287,7 @@ impl ApicTimer {
 mod tests {
     use crate::regs::lvt::LVT_TIMER::TimerMode::Value as TimerMode;
     use crate::timer::ApicTimer;
-    use axvisor_api::vmm::{VCpuId, VMId};
+    // use axvisor_api::vmm::{VCpuId, VMId};
 
     #[test]
     fn test_apic_timer_creation() {

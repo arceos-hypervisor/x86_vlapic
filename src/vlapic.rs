@@ -1,12 +1,12 @@
 use core::ptr::NonNull;
 
-use axvisor_api::vmm::{VCpuId, VMId};
+// use axvisor_api::vmm::{VCpuId, VMId};
 use bit::BitIndex;
 use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
 use axaddrspace::{HostPhysAddr, device::AccessWidth};
 use axerrno::{AxError, AxResult, ax_err_type};
-use axvisor_api::{memory::PhysFrame, vmm};
+// use axvisor_api::{memory::PhysFrame, vmm};
 
 use crate::consts::{
     APIC_LVT_DS, APIC_LVT_M, APIC_LVT_VECTOR, ApicRegOffset, LAPIC_TRIG_EDGE,
@@ -59,6 +59,8 @@ pub struct VirtualApicRegs {
     lvt_last: LocalVectorTable,
     apic_page: PhysFrame,
 }
+
+unsafe impl Send for VirtualApicRegs {}
 
 impl VirtualApicRegs {
     /// Create new virtual-APIC registers by allocating a 4-KByte page for the virtual-APIC page.
