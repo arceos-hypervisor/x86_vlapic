@@ -16,8 +16,13 @@ tock-registers = "0.10.0"
 bit = "0.1.1"
 
 memory_addr = "0.4"
-axerrno = "0.1.0"
+axerrno = "0.2"
 
-axaddrspace = "0.1.0"
+axaddrspace = "0.2.0"
 axdevice_base = "0.1.0"
-axvisor_api = "0.1.0"
+axvisor_api = "0.2.0"
+
+[patch.crates-io]
+axvisor_api = { git = "https://github.com/arceos-hypervisor/axvisor_api", branch = "aar-master" }
+axaddrspace = { git = "https://github.com/arceos-hypervisor/axaddrspace", branch = "aar-master" }
+axdevice_base = { git = "https://github.com/arceos-hypervisor/axdevice_crates", branch = "aar-master"}
