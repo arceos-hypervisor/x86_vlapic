@@ -1,3 +1,17 @@
+// Copyright 2025 The Axvisor Team
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! Emulated Local APIC.
 #![no_std]
 #![doc = include_str!("../README.md")]
@@ -95,19 +109,13 @@ impl BaseDeviceOps<AddrRange<GuestPhysAddr>> for EmulatedLocalApic {
     }
 
     fn handle_read(&self, addr: GuestPhysAddr, width: AccessWidth) -> AxResult<usize> {
-        debug!(
-            "EmulatedLocalApic::handle_read: addr={:?}, width={:?}",
-            addr, width,
-        );
+        debug!("EmulatedLocalApic::handle_read: addr={addr:?}, width={width:?}");
         let reg_off = xapic_mmio_access_reg_offset(addr);
         self.get_vlapic_regs().handle_read(reg_off, width)
     }
 
     fn handle_write(&self, addr: GuestPhysAddr, width: AccessWidth, val: usize) -> AxResult {
-        debug!(
-            "EmulatedLocalApic::handle_write: addr={:?}, width={:?}, val={:#x}",
-            addr, width, val,
-        );
+        debug!("EmulatedLocalApic::handle_write: addr={addr:?}, width={width:?}, val={val:#x}");
         let reg_off = xapic_mmio_access_reg_offset(addr);
         self.get_mut_vlapic_regs().handle_write(reg_off, val, width)
     }
@@ -127,19 +135,13 @@ impl BaseDeviceOps<SysRegAddrRange> for EmulatedLocalApic {
     }
 
     fn handle_read(&self, addr: SysRegAddr, width: AccessWidth) -> AxResult<usize> {
-        debug!(
-            "EmulatedLocalApic::handle_read: addr={:?}, width={:?}",
-            addr, width,
-        );
+        debug!("EmulatedLocalApic::handle_read: addr={addr:?}, width={width:?}");
         let reg_off = x2apic_msr_access_reg(addr);
         self.get_vlapic_regs().handle_read(reg_off, width)
     }
 
     fn handle_write(&self, addr: SysRegAddr, width: AccessWidth, val: usize) -> AxResult {
-        debug!(
-            "EmulatedLocalApic::handle_write: addr={:?}, width={:?}, val={:#x}",
-            addr, width, val
-        );
+        debug!("EmulatedLocalApic::handle_write: addr={addr:?}, width={width:?}, val={val:#x}");
         let reg_off = x2apic_msr_access_reg(addr);
         self.get_mut_vlapic_regs().handle_write(reg_off, val, width)
     }

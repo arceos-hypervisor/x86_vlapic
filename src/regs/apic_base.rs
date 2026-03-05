@@ -1,3 +1,17 @@
+// Copyright 2025 The Axvisor Team
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! 11.4.4 Local APIC Status and Location
 //! The status and location of the local APIC are contained in the IA32_APIC_BASE MSR (see Figure 11-5).
 //! Figure 11-26. IA32_APIC_BASE MSR Supporting x2APIC
@@ -48,9 +62,12 @@ register_bitfields! {
 /// IA32_APIC_BASE MSR (Model Specific Register) supporting x2APIC.
 /// - Address: 1B0H
 /// - Value after reset: FEE_0000_0000H
-/// Table 11-5, “x2APIC operating mode configurations” describe the possible combinations of the enable bit (EN - bit 11)
+///
+/// Table 11-5, "x2APIC operating mode configurations" describe the possible combinations of the enable bit (EN - bit 11)
 /// and the extended mode bit (EXTD - bit 10) in the IA32_APIC_BASE MSR.
+///
 /// (xAPIC global enable (IA32_APIC_BASE[11]),x2APIC enable (IA32_APIC_BASE[10])) = Description
+///
 /// - (0, 0) = local APIC is disabled
 /// - (0, 1) = Invalid
 /// - (1, 0) = local APIC is enabled in xAPIC mode

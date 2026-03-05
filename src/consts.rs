@@ -1,3 +1,17 @@
+// Copyright 2025 The Axvisor Team
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use paste::paste;
 
 macro_rules! define_index_enum {
@@ -58,6 +72,7 @@ define_index_enum!(TMRIndex);
 define_index_enum!(IRRIndex);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum ApicRegOffset {
     /// ID register 0x2.
     ID,
@@ -164,9 +179,9 @@ impl core::fmt::Display for ApicRegOffset {
             ApicRegOffset::LDR => write!(f, "LDR"),
             ApicRegOffset::DFR => write!(f, "DFR"),
             ApicRegOffset::SIVR => write!(f, "SIVR"),
-            ApicRegOffset::ISR(index) => write!(f, "{:?}", index),
-            ApicRegOffset::TMR(index) => write!(f, "{:?}", index),
-            ApicRegOffset::IRR(index) => write!(f, "{:?}", index),
+            ApicRegOffset::ISR(index) => write!(f, "{index:?}"),
+            ApicRegOffset::TMR(index) => write!(f, "{index:?}"),
+            ApicRegOffset::IRR(index) => write!(f, "{index:?}"),
             ApicRegOffset::ESR => write!(f, "ESR"),
             ApicRegOffset::LvtCMCI => write!(f, "LvtCMCI"),
             ApicRegOffset::ICRLow => write!(f, "ICR_LOW"),
@@ -198,6 +213,7 @@ pub const RESET_LVT_REG: u32 = APIC_LVT_M;
 /// - Value after reset: 0000 00FFH
 pub const RESET_SPURIOUS_INTERRUPT_VECTOR: u32 = 0x0000_00FF;
 
+#[allow(dead_code)]
 pub const LAPIC_TRIG_LEVEL: bool = true;
 pub const LAPIC_TRIG_EDGE: bool = false;
 
